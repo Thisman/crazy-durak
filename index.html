@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Crazy Durak</title>
+    <link rel="stylesheet" href="./styles/main.css">
+  </head>
+  <body>
+    <div id="app">
+      <section id="start-screen" class="screen start-screen" aria-labelledby="start-title">
+        <div class="start-panel">
+          <p class="eyebrow">52 карты · перевод со второго боя</p>
+          <h1 id="start-title">Crazy Durak</h1>
+          <p class="start-copy">Минималистичный дурак против ИИ. Тащите карту на стол для атаки или перевода, либо прямо на карту противника для защиты.</p>
+          <button id="start-button" class="primary-action" type="button">Начать игру</button>
+        </div>
+      </section>
+
+      <section id="game-screen" class="screen game-screen is-hidden" aria-label="Игровой стол">
+        <header class="game-header">
+          <div class="game-title-block">
+            <p class="eyebrow">Бой <span id="battle-number">1</span></p>
+            <div class="title-row">
+              <h2>Дурак</h2>
+              <button id="restart-button" class="ghost-action" type="button">Новая игра</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="game-board">
+          <section class="opponent-zone" aria-label="Противник">
+            <div class="opponent-hand-viewport">
+              <div id="opponent-hand" class="opponent-hand"></div>
+            </div>
+          </section>
+
+          <aside class="side-zone log-zone" aria-label="Лог событий">
+            <div class="side-heading">
+              <span class="pile-label">События</span>
+            </div>
+            <ol id="event-log" class="event-log"></ol>
+          </aside>
+
+          <section id="table-drop-zone" class="play-table" data-drop-target="table" aria-label="Поле боя">
+            <div id="battle-row" class="battle-row"></div>
+            <p id="table-hint" class="table-hint">Перетащите карту на поле</p>
+          </section>
+
+          <aside class="side-zone deck-zone" aria-label="Колода и бито">
+            <div class="counter-group">
+              <span class="pile-label">Бито</span>
+              <strong id="discard-count">0</strong>
+              <span>карт</span>
+            </div>
+            <div class="counter-group deck-counter">
+              <span class="pile-label">Колода</span>
+              <strong id="deck-count">0</strong>
+              <span>карт</span>
+            </div>
+            <div id="trump-card-slot" class="trump-card-slot"></div>
+          </aside>
+        </main>
+
+        <footer class="player-area" aria-label="Рука игрока">
+          <div class="player-controls">
+            <button id="take-button" class="secondary-action" type="button">Взять</button>
+            <button id="finish-button" class="secondary-action" type="button">Бито</button>
+          </div>
+          <div class="hand-slider">
+            <button id="hand-prev" class="hand-arrow" type="button" aria-label="Прокрутить руку влево">‹</button>
+            <div id="player-hand-viewport" class="player-hand-viewport">
+              <div id="player-hand" class="player-hand"></div>
+            </div>
+            <button id="hand-next" class="hand-arrow" type="button" aria-label="Прокрутить руку вправо">›</button>
+          </div>
+        </footer>
+      </section>
+
+      <div id="result-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
+        <div class="modal-panel">
+          <p class="eyebrow">Партия завершена</p>
+          <h2 id="result-title">Результат</h2>
+          <p id="result-copy">Игра окончена.</p>
+          <button id="modal-new-game" class="primary-action" type="button">Сыграть еще</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
