@@ -1,16 +1,16 @@
 import { SUIT_BY_ID, createDeck, createRng, shuffle, sortCards } from './cards.js';
 import { chooseAttackCard, chooseDefenseCard, chooseThrowInCard, chooseTransferCard } from './ai.js';
-import { createCardModel, createFieldModel } from './model.js';
+import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel } from './model.js';
+import { assignRandomEffects } from './effects.js';
 import {
   HAND_TARGET,
   allDefended,
   battleCards,
-  canBeat,
   canFinishBattle,
   canStartAttack,
   canThrowIn,
-  canTransfer,
   firstUndefendedSlot,
+  isSlotDefended,
   opponentOf
 } from './rules.js';
 
@@ -19,13 +19,34 @@ function cloneCard(card) {
 }
 
 function cloneBattle(battle) {
-  return battle.map((slot) => ({
-    attack: cloneCard(slot.attack),
-    defense: cloneCard(slot.defense),
-    attackPosition: slot.attackPosition ? { ...slot.attackPosition } : null,
-    defensePosition: slot.defensePosition ? { ...slot.defensePosition } : null,
-    source: slot.source ?? null
-  }));
+  return battle.map((slot) => {
+    const defenses = Array.isArray(slot.defenses)
+      ? slot.defenses.map(cloneCard)
+      : (slot.defense ? [cloneCard(slot.defense)] : []);
+    const defensePositions = Array.isArray(slot.defensePositions)
+      ? slot.defensePositions.map((position) => (position ? { ...position } : null))
+      : (slot.defensePosition ? [{ ...slot.defensePosition }] : []);
+    const defenseSources = Array.isArray(slot.defenseSources)
+      ? [...slot.defenseSources]
+      : defenses.map(() => null);
+
+    return {
+      attack: cloneCard(slot.attack),
+      defense: defenses.at(-1) ?? null,
+      defenses,
+      attackPosition: slot.attackPosition ? { ...slot.attackPosition } : null,
+      defensePosition: defensePositions.at(-1) ?? null,
+      defensePositions,
+      defenseSources,
+      attackOrder: Number.isFinite(slot.attackOrder) ? slot.attackOrder : null,
+      defenseOrder: Number.isFinite(slot.defenseOrder) ? slot.defenseOrder : null,
+      defenseOrders: Array.isArray(slot.defenseOrders)
+        ? slot.defenseOrders.map((order) => (Number.isFinite(order) ? order : null))
+        : (Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : []),
+      requiredDefenseCount: slot.requiredDefenseCount ?? 1,
+      source: slot.source ?? null
+    };
+  });
 }
 
 function clamp01(value) {
@@ -55,6 +76,7 @@ function createEmptyState() {
     defender: 'ai',
     defenderStartHandCount: HAND_TARGET,
     battleNumber: 1,
+    nextPlayOrder: 1,
     lastEvent: 'Нажмите «Начать игру».',
     eventLog: []
   };
@@ -77,6 +99,7 @@ function cloneState(state) {
     ...state,
     deck: state.deck.map(cloneCard),
     trumpCard: cloneCard(state.trumpCard),
+    nextPlayOrder: Number.isFinite(state.nextPlayOrder) ? state.nextPlayOrder : null,
     hands: {
       player: state.hands.player.map(cloneCard),
       ai: state.hands.ai.map(cloneCard)
@@ -137,25 +160,105 @@ function defensePositionNear(slot) {
   });
 }
 
-function createBattleSlot(attack, position, source = 'player') {
+function maxPlayOrder(state) {
+  let maxOrder = 0;
+
+  for (const slot of state.battle ?? []) {
+    if (Number.isFinite(slot.attackOrder)) maxOrder = Math.max(maxOrder, slot.attackOrder);
+    if (Number.isFinite(slot.defenseOrder)) maxOrder = Math.max(maxOrder, slot.defenseOrder);
+    for (const order of slot.defenseOrders ?? []) {
+      if (Number.isFinite(order)) maxOrder = Math.max(maxOrder, order);
+    }
+  }
+
+  return maxOrder;
+}
+
+function nextPlayOrder(state) {
+  if (!Number.isFinite(state.nextPlayOrder)) {
+    state.nextPlayOrder = maxPlayOrder(state) + 1;
+  }
+
+  const order = state.nextPlayOrder;
+  state.nextPlayOrder += 1;
+  return order;
+}
+
+function positionsOverlap(a, b) {
+  return Math.abs(a.x - b.x) < 0.14 && Math.abs(a.y - b.y) < 0.22;
+}
+
+function hasActiveAttackOverlap(state, position) {
+  return state.battle.some((slot) => (
+    !isSlotDefended(slot) && positionsOverlap(position, normalizePosition(slot.attackPosition))
+  ));
+}
+
+function resolveAttackPosition(state, position, avoidOverlap) {
+  const start = normalizePosition(position);
+  if (!avoidOverlap || !hasActiveAttackOverlap(state, start)) return start;
+
+  const shift = 0.18;
+  const candidates = [
+    { ...start, x: clamp01(start.x + shift) },
+    { ...start, x: clamp01(start.x - shift) },
+    { ...start, x: clamp01(start.x + shift * 1.35) },
+    { ...start, x: clamp01(start.x - shift * 1.35) }
+  ].sort((a, b) => Math.abs(a.x - start.x) - Math.abs(b.x - start.x));
+
+  return candidates.find((candidate) => !hasActiveAttackOverlap(state, candidate)) ?? candidates[0] ?? start;
+}
+
+function createBattleSlot(state, attack, position, source = 'player', options = {}) {
+  const attackPosition = source === 'ai'
+    ? normalizePosition(position, { x: 0.5, y: 0.42 })
+    : resolveAttackPosition(state, position, options.avoidActiveAttackOverlap);
+
   return {
     attack,
     defense: null,
-    attackPosition: normalizePosition(position, source === 'ai' ? { x: 0.5, y: 0.42 } : undefined),
+    defenses: [],
+    attackPosition,
     defensePosition: null,
+    defensePositions: [],
+    defenseSources: [],
+    attackOrder: nextPlayOrder(state),
+    defenseOrder: null,
+    defenseOrders: [],
+    requiredDefenseCount: 1,
     source
   };
 }
 
-function setupState(seed) {
-  const rng = createRng(seed);
-  const deck = shuffle(createDeck(), rng);
-  const state = createEmptyState();
+function publicCard(card, state, actor = 'player') {
+  if (!card) return null;
+  const model = createCardModel(card, state, actor);
 
-  for (let i = 0; i < HAND_TARGET; i += 1) {
-    drawCard(state, 'player');
-    drawCard(state, 'ai');
-  }
+  return {
+    ...cloneCard(card),
+    nominal: model.nominal,
+    effectId: model.effectId,
+    effectTitle: model.effectTitle,
+    effectDescription: model.effectDescription,
+    effectIcon: model.effectIcon
+  };
+}
+
+function publicBattle(state) {
+  return cloneBattle(state.battle).map((slot) => ({
+    ...slot,
+    attack: publicCard(slot.attack, state),
+    defense: publicCard(slot.defense, state),
+    defenses: slot.defenses.map((defense) => publicCard(defense, state)),
+    defenseSources: [...(slot.defenseSources ?? [])],
+    defenseOrders: [...(slot.defenseOrders ?? [])],
+    isDefended: isSlotDefended(slot)
+  }));
+}
+
+function setupState(seed, rng = createRng(seed)) {
+  const deck = shuffle(assignRandomEffects(createDeck(), rng), rng);
+  const state = createEmptyState();
 
   state.deck = deck.slice(HAND_TARGET * 2);
   state.hands.player = deck.slice(0, HAND_TARGET);
@@ -177,11 +280,14 @@ export class DurakGame {
   constructor(seed = String(Date.now()), options = {}) {
     this.seed = seed;
     this.autoAdvanceAi = options.autoAdvanceAi ?? true;
+    this.rng = createRng(this.seed || String(Date.now()));
     this.state = options.state ? cloneState(options.state) : createEmptyState();
   }
 
   startGame() {
-    this.state = setupState(this.seed || String(Date.now()));
+    const seed = this.seed || String(Date.now());
+    this.rng = createRng(seed);
+    this.state = setupState(seed, this.rng);
     if (this.autoAdvanceAi) this.advanceAi();
     return this.result(true);
   }
@@ -200,6 +306,10 @@ export class DurakGame {
       playerCardModels.push({
         ...card,
         nominal: model.nominal,
+        effectId: model.effectId,
+        effectTitle: model.effectTitle,
+        effectDescription: model.effectDescription,
+        effectIcon: model.effectIcon,
         isValid: targets.length > 0
       });
     }
@@ -211,13 +321,13 @@ export class DurakGame {
       trumpSuit: this.state.trumpSuit,
       trumpSymbol: this.state.trumpSuit ? SUIT_BY_ID[this.state.trumpSuit].symbol : '—',
       trumpLabel: this.state.trumpSuit ? SUIT_BY_ID[this.state.trumpSuit].label : '—',
-      trumpCard: cloneCard(this.state.trumpCard),
+      trumpCard: publicCard(this.state.trumpCard, this.state),
       deckCount: this.state.deck.length,
       discardCount: (this.state.discardPile ?? []).length || this.state.discardCount,
       aiCardCount: this.state.hands.ai.length,
       playerCardCount: this.state.hands.player.length,
       playerHand: playerCardModels,
-      battle: cloneBattle(this.state.battle),
+      battle: publicBattle(this.state),
       discardCards: fieldModel.discardCards,
       deckCards: fieldModel.deckCards,
       enemyCards: fieldModel.enemyCards,
@@ -262,7 +372,8 @@ export class DurakGame {
     }
 
     if (resolvedTarget.startsWith('attack-card:')) {
-      return this.playDefense(resolvedTarget.replace('attack-card:', ''), cardId, position);
+      const defensePosition = target === 'table' ? null : position;
+      return this.playDefense(resolvedTarget.replace('attack-card:', ''), cardId, defensePosition);
     }
 
     return this.result(false, 'Неизвестная цель для карты.');
@@ -277,7 +388,7 @@ export class DurakGame {
       return 'table';
     }
 
-    if (this.state.defender === 'player' && targets.includes('table') && canTransfer(this.state, 'player', card)) {
+    if (this.state.defender === 'player' && targets.includes('table') && canCardTransfer(card, this.state, 'player')) {
       return targets.includes('table') ? 'table' : null;
     }
 
@@ -290,10 +401,12 @@ export class DurakGame {
     }
 
     const card = removeCard(this.state.hands.player, cardId);
-    if (!card) return this.result(false, 'Карта не найдена в руке.');
+    if (!card) return this.result(false, 'Карта не найдена среди карт игрока.');
 
-    this.state.battle.push(createBattleSlot(card, position, 'player'));
+    const slot = createBattleSlot(this.state, card, position, 'player');
+    this.state.battle.push(slot);
     recordEvent(this.state, `Вы атаковали картой ${card.rank}${card.symbol}.`);
+    this.applyPlayedCardEffect(card, 'player', { slot, role: 'attack' });
     return this.afterPlayerAction();
   }
 
@@ -304,8 +417,10 @@ export class DurakGame {
     }
 
     removeCard(this.state.hands.player, cardId);
-    this.state.battle.push(createBattleSlot(card, position, 'player'));
+    const slot = createBattleSlot(this.state, card, position, 'player', { avoidActiveAttackOverlap: true });
+    this.state.battle.push(slot);
     recordEvent(this.state, `Вы подкинули ${card.rank}${card.symbol}.`);
+    this.applyPlayedCardEffect(card, 'player', { slot, role: 'throw-in' });
     return this.afterPlayerAction();
   }
 
@@ -317,15 +432,32 @@ export class DurakGame {
     const slot = this.state.battle.find((item) => item.attack.id === attackCardId);
     const defense = findCard(this.state.hands.player, defenseCardId);
 
-    if (!slot || slot.defense) return this.result(false, 'Эту карту уже нельзя бить.');
-    if (!defense || !canBeat(slot.attack, defense, this.state.trumpSuit)) {
+    if (!slot || isSlotDefended(slot)) return this.result(false, 'Эту карту уже нельзя бить.');
+    if (!defense || !canCardBeatAttack(defense, slot.attack, this.state)) {
       return this.result(false, 'Эта карта не бьет выбранную атаку.');
     }
 
     removeCard(this.state.hands.player, defenseCardId);
+    const defensePosition = normalizePosition(position, defensePositionNear(slot));
+    slot.defenses ??= slot.defense ? [slot.defense] : [];
+    slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
+    slot.defenseSources ??= [];
+    slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
+    const defenseOrder = nextPlayOrder(this.state);
+    slot.defenses.push(defense);
+    slot.defensePositions.push(defensePosition);
+    slot.defenseSources.push('player');
+    slot.defenseOrders.push(defenseOrder);
     slot.defense = defense;
-    slot.defensePosition = normalizePosition(position, defensePositionNear(slot));
+    slot.defensePosition = defensePosition;
+    slot.defenseOrder = defenseOrder;
     recordEvent(this.state, `Вы отбились картой ${defense.rank}${defense.symbol}.`);
+    this.applyPlayedCardEffect(defense, 'player', {
+      slot,
+      coveredSlot: slot,
+      coveredCard: slot.attack,
+      role: 'defense'
+    });
     return this.afterPlayerAction();
   }
 
@@ -335,12 +467,14 @@ export class DurakGame {
     }
 
     const card = findCard(this.state.hands.player, cardId);
-    if (!card || !canTransfer(this.state, 'player', card)) {
+    if (!card || !canCardTransfer(card, this.state, 'player')) {
       return this.result(false, 'Эту карту нельзя перевести.');
     }
 
     removeCard(this.state.hands.player, cardId);
-    this.state.battle.push(createBattleSlot(card, position, 'player'));
+    const slot = createBattleSlot(this.state, card, position, 'player');
+    this.state.battle.push(slot);
+    this.applyPlayedCardEffect(card, 'player', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;
     recordEvent(this.state, `Вы перевели ход картой ${card.rank}${card.symbol}.`);
@@ -369,7 +503,7 @@ export class DurakGame {
   canPlayerTake() {
     return this.state.phase === 'playing'
       && this.state.defender === 'player'
-      && this.state.battle.some((slot) => !slot.defense);
+      && this.state.battle.some((slot) => !isSlotDefended(slot));
   }
 
   afterPlayerAction() {
@@ -390,6 +524,28 @@ export class DurakGame {
       error,
       state: this.getPublicState()
     };
+  }
+
+  applyPlayedCardEffect(card, actor, context = {}) {
+    const model = createCardModel(card, this.state, actor);
+    if (!model.effectId) return null;
+
+    const zones = createFieldModel(this.state, actor, { mutable: true });
+    const outcome = zones.apply(model, {
+      ...context,
+      state: this.state,
+      actor,
+      enemy: opponentOf(actor),
+      random: this.rng
+    });
+
+    this.state.discardCount = (this.state.discardPile ?? []).length;
+
+    if (outcome?.applied && outcome.message) {
+      recordEvent(this.state, `Эффект ${card.rank}${card.symbol}: ${outcome.message}.`);
+    }
+
+    return outcome;
   }
 
   swapRoles() {
@@ -421,18 +577,34 @@ export class DurakGame {
         const slot = firstUndefendedSlot(this.state.battle);
         if (!slot) break;
 
-        const defense = chooseDefenseCard(this.state.hands.ai, slot.attack, this.state.trumpSuit);
+        const defense = chooseDefenseCard(this.state.hands.ai, slot.attack, this.state.trumpSuit, this.state);
         if (!defense) {
           this.resolveTake('ai');
           continue;
         }
 
         removeCard(this.state.hands.ai, defense.id);
+        const defensePosition = defensePositionNear(slot);
+        slot.defenses ??= slot.defense ? [slot.defense] : [];
+        slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
+        slot.defenseSources ??= [];
+        slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
+        const defenseOrder = nextPlayOrder(this.state);
+        slot.defenses.push(defense);
+        slot.defensePositions.push(defensePosition);
+        slot.defenseSources.push('ai');
+        slot.defenseOrders.push(defenseOrder);
         slot.defense = defense;
-        slot.defensePosition = defensePositionNear(slot);
+        slot.defensePosition = defensePosition;
+        slot.defenseOrder = defenseOrder;
         recordEvent(this.state, `ИИ отбился картой ${defense.rank}${defense.symbol}.`);
+        this.applyPlayedCardEffect(defense, 'ai', {
+          slot,
+          coveredSlot: slot,
+          coveredCard: slot.attack,
+          role: 'defense'
+        });
 
-        if (firstUndefendedSlot(this.state.battle)) continue;
         break;
       }
 
@@ -441,8 +613,10 @@ export class DurakGame {
           const throwCard = chooseThrowInCard(this.state.hands.ai, this.state, 'ai');
           if (throwCard) {
             removeCard(this.state.hands.ai, throwCard.id);
-            this.state.battle.push(createBattleSlot(throwCard, aiTablePosition(this.state), 'ai'));
+            const slot = createBattleSlot(this.state, throwCard, aiTablePosition(this.state), 'ai');
+            this.state.battle.push(slot);
             recordEvent(this.state, `ИИ подкинул ${throwCard.rank}${throwCard.symbol}.`);
+            this.applyPlayedCardEffect(throwCard, 'ai', { slot, role: 'throw-in' });
             break;
           }
 
@@ -458,15 +632,17 @@ export class DurakGame {
   }
 
   aiAttack() {
-    const card = chooseAttackCard(this.state.hands.ai, this.state.trumpSuit);
+    const card = chooseAttackCard(this.state.hands.ai, this.state.trumpSuit, this.state);
     if (!card) {
       this.checkGameOver();
       return;
     }
 
     removeCard(this.state.hands.ai, card.id);
-    this.state.battle.push(createBattleSlot(card, aiTablePosition(this.state), 'ai'));
+    const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
+    this.state.battle.push(slot);
     recordEvent(this.state, `ИИ атаковал картой ${card.rank}${card.symbol}.`);
+    this.applyPlayedCardEffect(card, 'ai', { slot, role: 'attack' });
   }
 
   aiMaybeTransfer() {
@@ -476,7 +652,9 @@ export class DurakGame {
     if (!transfer) return false;
 
     removeCard(this.state.hands.ai, transfer.id);
-    this.state.battle.push(createBattleSlot(transfer, aiTablePosition(this.state), 'ai'));
+    const slot = createBattleSlot(this.state, transfer, aiTablePosition(this.state), 'ai');
+    this.state.battle.push(slot);
+    this.applyPlayedCardEffect(transfer, 'ai', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;
     recordEvent(this.state, `ИИ перевел ход картой ${transfer.rank}${transfer.symbol}.`);
@@ -491,8 +669,10 @@ export class DurakGame {
       if (!card) return;
 
       removeCard(this.state.hands.ai, card.id);
-      this.state.battle.push(createBattleSlot(card, aiTablePosition(this.state), 'ai'));
+      const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
+      this.state.battle.push(slot);
       recordEvent(this.state, `ИИ подкинул ${card.rank}${card.symbol}.`);
+      this.applyPlayedCardEffect(card, 'ai', { slot, role: 'throw-in' });
       throws += 1;
     }
   }
@@ -500,7 +680,9 @@ export class DurakGame {
   resolveTake(defender) {
     const attacker = opponentOf(defender);
     const collected = battleCards(this.state.battle);
+
     this.state.hands[defender].push(...collected);
+
     recordEvent(this.state, defender === 'player'
       ? `Вы взяли ${collected.length} карт.`
       : `ИИ взял ${collected.length} карт.`);

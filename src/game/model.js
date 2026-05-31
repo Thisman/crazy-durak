@@ -4,9 +4,15 @@ import {
   canThrowIn,
   canTransfer,
   battleCards,
+  isSlotDefended,
   opponentOf,
   tableRanks
 } from './rules.js';
+import {
+  applyCardEffect,
+  getCardEffect,
+  getCardEffectId
+} from './effects.js';
 
 function cloneCard(card) {
   return card ? { ...card } : null;
@@ -16,17 +22,31 @@ function normalizeCards(cards) {
   return Array.isArray(cards) ? cards.filter(Boolean) : [];
 }
 
-export function createFieldModel(state, actor = 'player') {
+export function createFieldModel(state, actor = 'player', options = {}) {
   const enemy = opponentOf(actor);
+  const cards = (items) => (options.mutable ? items : items.map(cloneCard));
 
   return {
-    discardCards: (state.discardPile ?? []).map(cloneCard),
-    deckCards: state.deck.map(cloneCard),
-    enemyCards: state.hands[enemy].map(cloneCard),
-    playerCards: state.hands[actor].map(cloneCard),
-    fieldCards: battleCards(state.battle).map(cloneCard),
-    apply() {}
+    discardCards: cards(state.discardPile ?? []),
+    deckCards: cards(state.deck),
+    enemyCards: cards(state.hands[enemy]),
+    playerCards: cards(state.hands[actor]),
+    humanCards: cards(state.hands.player),
+    aiCards: cards(state.hands.ai),
+    fieldCards: cards(battleCards(state.battle)),
+    apply(cardModel, context) {
+      return cardModel?.apply?.(this, context) ?? null;
+    }
   };
+}
+
+export function canCardBeatAttack(defenseCard, attackCard, state) {
+  if (!defenseCard || !attackCard) return false;
+  return canBeat(attackCard, defenseCard, state.trumpSuit);
+}
+
+export function canCardTransfer(card, state, actor) {
+  return canTransfer(state, actor, card);
 }
 
 export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards(state.battle)) {
@@ -51,13 +71,13 @@ export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards
     }
   }
 
-  if (canTransfer(state, actor, card)) {
+  if (canCardTransfer(card, state, actor)) {
     targets.push('table');
   }
 
   if (state.defender === actor) {
     const defenseTargets = state.battle
-      .filter((slot) => !slot.defense && canBeat(slot.attack, card, state.trumpSuit))
+      .filter((slot) => !isSlotDefended(slot) && canCardBeatAttack(card, slot.attack, state))
       .map((slot) => `attack-card:${slot.attack.id}`);
 
     targets.push(...defenseTargets);
@@ -71,17 +91,26 @@ export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards
 }
 
 export function createCardModel(card, state, actor = 'player') {
+  const effect = getCardEffect(card);
+  const effectId = getCardEffectId(card);
+
   return {
     ...cloneCard(card),
     nominal: card?.rank ?? null,
     rank: card?.rank ?? null,
     suit: card?.suit ?? null,
+    effectId,
+    effectTitle: effect?.title ?? null,
+    effectDescription: effect?.description ?? null,
+    effectIcon: effect?.icon ?? null,
     isValid(cardsInPlay) {
       return getCardDropTargets(card, state, actor, cardsInPlay).length > 0;
     },
     getDropTargets(cardsInPlay) {
       return getCardDropTargets(card, state, actor, cardsInPlay);
     },
-    apply() {}
+    apply(zones, context = {}) {
+      return applyCardEffect(this, zones, context);
+    }
   };
 }

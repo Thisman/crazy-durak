@@ -4,6 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Crazy Durak</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="./styles/main.css">
   </head>
   <body>
@@ -60,22 +65,29 @@
             </div>
             <div id="trump-card-slot" class="trump-card-slot"></div>
           </aside>
-        </main>
-
-        <footer class="player-area" aria-label="Рука игрока">
-          <div class="player-controls">
-            <button id="take-button" class="secondary-action" type="button">Взять</button>
-            <button id="finish-button" class="secondary-action" type="button">Бито</button>
-          </div>
-          <div class="hand-slider">
-            <button id="hand-prev" class="hand-arrow" type="button" aria-label="Прокрутить руку влево">‹</button>
-            <div id="player-hand-viewport" class="player-hand-viewport">
-              <div id="player-hand" class="player-hand"></div>
+          <footer class="player-area" aria-label="Карты игрока">
+            <div class="player-controls">
+              <button id="take-button" class="secondary-action" type="button">Взять</button>
+              <button id="finish-button" class="secondary-action" type="button">Бито</button>
             </div>
-            <button id="hand-next" class="hand-arrow" type="button" aria-label="Прокрутить руку вправо">›</button>
-          </div>
-        </footer>
+            <div class="hand-slider">
+              <button id="hand-prev" class="hand-arrow" type="button" aria-label="Прокрутить карты игрока влево">‹</button>
+              <div id="player-hand-viewport" class="player-hand-viewport">
+                <div id="player-hand" class="player-hand"></div>
+              </div>
+              <button id="hand-next" class="hand-arrow" type="button" aria-label="Прокрутить карты игрока вправо">›</button>
+            </div>
+          </footer>
+        </main>
       </section>
+
+      <div id="effect-tooltip" class="effect-tooltip is-hidden" role="tooltip">
+        <div class="effect-tooltip-icon" aria-hidden="true"></div>
+        <div>
+          <strong class="effect-tooltip-title"></strong>
+          <p class="effect-tooltip-copy"></p>
+        </div>
+      </div>
 
       <div id="result-modal" class="modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
         <div class="modal-panel">

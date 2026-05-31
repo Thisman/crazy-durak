@@ -3,6 +3,8 @@ export class DragController {
     this.hand = options.hand;
     this.getState = options.getState;
     this.onDrop = options.onDrop;
+    this.onDragStart = options.onDragStart ?? (() => {});
+    this.onDragEnd = options.onDragEnd ?? (() => {});
     this.active = null;
 
     this.hand.addEventListener('pointerdown', (event) => this.onPointerDown(event));
@@ -21,6 +23,8 @@ export class DragController {
     event.preventDefault();
     source.setPointerCapture?.(event.pointerId);
 
+    const targetSet = new Set(targets);
+    const dropTargets = this.collectDropTargets(targetSet);
     const rect = source.getBoundingClientRect();
     const ghost = source.cloneNode(true);
     ghost.classList.add('drag-ghost');
@@ -34,15 +38,20 @@ export class DragController {
       source,
       sourceRect: rect,
       ghost,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
+      offsetX: rect.width / 2,
+      offsetY: rect.height / 2,
       targets,
-      currentTarget: null
+      targetSet,
+      dropTargets,
+      currentTarget: null,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY
     };
 
     source.classList.add('is-drag-source');
+    this.onDragStart({ cardId, source });
     document.body.classList.add('is-dragging-card');
-    this.markEligibleTargets(targets);
+    this.markEligibleTargets(dropTargets);
     this.moveGhost(event.clientX, event.clientY);
 
     window.addEventListener('pointermove', this.onPointerMove);
@@ -54,14 +63,30 @@ export class DragController {
     if (!this.active || event.pointerId !== this.active.pointerId) return;
 
     event.preventDefault();
-    this.moveGhost(event.clientX, event.clientY);
-    this.updateActiveTarget(event.clientX, event.clientY);
+    this.active.lastClientX = event.clientX;
+    this.active.lastClientY = event.clientY;
+
+    if (this.active.moveFrame) return;
+
+    this.active.moveFrame = window.requestAnimationFrame(() => {
+      if (!this.active) return;
+      this.active.moveFrame = 0;
+      this.moveGhost(this.active.lastClientX, this.active.lastClientY);
+      this.updateActiveTarget(this.active.lastClientX, this.active.lastClientY);
+    });
   };
 
   onPointerUp = (event) => {
     if (!this.active || event.pointerId !== this.active.pointerId) return;
 
     event.preventDefault();
+    if (this.active.moveFrame) {
+      window.cancelAnimationFrame(this.active.moveFrame);
+      this.active.moveFrame = 0;
+    }
+    this.moveGhost(event.clientX, event.clientY);
+    this.updateActiveTarget(event.clientX, event.clientY);
+
     const targetId = this.active.currentTarget?.dataset.dropTarget ?? null;
     const active = this.active;
     const drop = targetId ? {
@@ -72,12 +97,15 @@ export class DragController {
     this.cleanupTargetClasses();
 
     if (drop) {
-      active.ghost.classList.add('is-dropping');
-      window.setTimeout(() => active.ghost.remove(), 140);
-      active.source.classList.remove('is-drag-source');
       this.detachWindowEvents();
       this.active = null;
-      this.onDrop(active.cardId, drop);
+      this.onDragEnd({ cardId: active.cardId, source: active.source, dropped: true });
+      const dropResult = this.onDrop(active.cardId, drop);
+      Promise.resolve(dropResult).catch((error) => console.error(error));
+      window.requestAnimationFrame(() => {
+        active.ghost.remove();
+        active.source.classList.remove('is-drag-source');
+      });
       return;
     }
 
@@ -92,15 +120,17 @@ export class DragController {
 
   moveGhost(clientX, clientY) {
     const { ghost, offsetX, offsetY } = this.active;
-    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(1.04) rotate(-1deg)`;
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(1.06) rotate(-1deg)`;
   }
 
   updateActiveTarget(clientX, clientY) {
-    const elements = document.elementsFromPoint(clientX, clientY);
-    const nextTarget = elements.find((element) => {
-      const target = element.dataset?.dropTarget;
-      return target && this.active.targets.includes(target);
-    }) ?? null;
+    const target = this.active.dropTargets.find((item) => (
+      clientX >= item.rect.left
+        && clientX <= item.rect.right
+        && clientY >= item.rect.top
+        && clientY <= item.rect.bottom
+    ));
+    const nextTarget = target?.element ?? null;
 
     if (nextTarget === this.active.currentTarget) return;
 
@@ -109,23 +139,46 @@ export class DragController {
     this.active.currentTarget = nextTarget;
   }
 
-  markEligibleTargets(targets) {
-    for (const target of targets) {
-      const element = document.querySelector(`[data-drop-target="${CSS.escape(target)}"]`);
-      document.querySelectorAll(`[data-drop-target="${CSS.escape(target)}"]`).forEach((item) => {
-        item.classList.add('drop-eligible');
+  collectDropTargets(targetSet) {
+    const uniqueElements = new Set();
+
+    for (const target of targetSet) {
+      const selector = `[data-drop-target="${CSS.escape(target)}"]`;
+      const elements = [...document.querySelectorAll(selector)];
+      const hasBattleSlot = elements.some((element) => element.classList.contains('battle-slot'));
+
+      elements.forEach((element) => {
+        if (hasBattleSlot && element.classList.contains('table-card')) return;
+        uniqueElements.add(element);
       });
-      element?.classList.add('drop-eligible');
+    }
+
+    return [...uniqueElements]
+      .map((element) => ({
+        element,
+        rect: element.getBoundingClientRect(),
+        priority: this.getTargetPriority(element)
+      }))
+      .sort((a, b) => b.priority - a.priority);
+  }
+
+  getTargetPriority(element) {
+    if (element.classList.contains('battle-slot')) return 30;
+    if (element.classList.contains('table-card')) return 20;
+    return 10;
+  }
+
+  markEligibleTargets(dropTargets) {
+    for (const { element } of dropTargets) {
+      element.classList.add('drop-eligible');
     }
   }
 
   getTablePosition(clientX, clientY) {
-    const table = document.querySelector('#table-drop-zone');
-    const rect = table.getBoundingClientRect();
-    const cardWidth = this.active.sourceRect.width;
-    const cardHeight = this.active.sourceRect.height;
-    const x = (clientX - rect.left - cardWidth / 2) / Math.max(1, rect.width - cardWidth);
-    const y = (clientY - rect.top - cardHeight / 2) / Math.max(1, rect.height - cardHeight);
+    const layer = document.querySelector('#battle-row') ?? document.querySelector('#table-drop-zone');
+    const rect = layer.getBoundingClientRect();
+    const x = (clientX - rect.left) / Math.max(1, rect.width);
+    const y = (clientY - rect.top) / Math.max(1, rect.height);
 
     return {
       x: Math.min(1, Math.max(0, x)),
@@ -150,9 +203,14 @@ export class DragController {
     }, 190);
     this.detachWindowEvents();
     this.active = null;
+    this.onDragEnd({ cardId: active.cardId, source, dropped: false });
   }
 
   detachWindowEvents() {
+    if (this.active?.moveFrame) {
+      window.cancelAnimationFrame(this.active.moveFrame);
+      this.active.moveFrame = 0;
+    }
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerCancel);

@@ -19,27 +19,47 @@ export function isTrump(card, trumpSuit) {
   return card.suit === trumpSuit;
 }
 
+export function slotDefenses(slot) {
+  if (!slot) return [];
+  if (Array.isArray(slot.defenses)) return slot.defenses.filter(Boolean);
+  return slot.defense ? [slot.defense] : [];
+}
+
+export function slotDefenseCount(slot) {
+  return slotDefenses(slot).length;
+}
+
+export function requiredDefenseCount(slot) {
+  return Math.max(1, Number(slot?.requiredDefenseCount) || 1);
+}
+
+export function isSlotDefended(slot) {
+  return slotDefenseCount(slot) >= requiredDefenseCount(slot);
+}
+
 export function tableRanks(battle) {
   const ranks = new Set();
 
   for (const slot of battle) {
     ranks.add(slot.attack.rank);
-    if (slot.defense) ranks.add(slot.defense.rank);
+    for (const defense of slotDefenses(slot)) {
+      ranks.add(defense.rank);
+    }
   }
 
   return ranks;
 }
 
 export function allDefended(battle) {
-  return battle.length > 0 && battle.every((slot) => Boolean(slot.defense));
+  return battle.length > 0 && battle.every((slot) => isSlotDefended(slot));
 }
 
 export function firstUndefendedSlot(battle) {
-  return battle.find((slot) => !slot.defense) ?? null;
+  return battle.find((slot) => !isSlotDefended(slot)) ?? null;
 }
 
 export function battleCards(battle) {
-  return battle.flatMap((slot) => (slot.defense ? [slot.attack, slot.defense] : [slot.attack]));
+  return battle.flatMap((slot) => [slot.attack, ...slotDefenses(slot)]);
 }
 
 export function canStartAttack(state, actor) {
@@ -65,7 +85,7 @@ export function canTransfer(state, actor, card) {
   if (state.defender !== actor) return false;
   if (state.battleNumber <= 1) return false;
   if (state.battle.length === 0) return false;
-  if (state.battle.some((slot) => slot.defense)) return false;
+  if (state.battle.some((slot) => slotDefenseCount(slot) > 0)) return false;
 
   const rank = state.battle[0].attack.rank;
   if (card.rank !== rank) return false;
@@ -93,7 +113,7 @@ function getLegacyDropTargets(state, actor, card) {
 
   if (state.defender === actor) {
     for (const slot of state.battle) {
-      if (!slot.defense && canBeat(slot.attack, card, state.trumpSuit)) {
+      if (!isSlotDefended(slot) && canBeat(slot.attack, card, state.trumpSuit)) {
         targets.push(`attack-card:${slot.attack.id}`);
       }
     }
