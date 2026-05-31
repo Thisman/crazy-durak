@@ -419,7 +419,7 @@ export class DurakGame {
     for (const item of canceled) {
       recordEvent(
         this.state,
-        `глушитель ${item.nullifier.rank}${item.nullifier.symbol} отменил эффект «${item.effect.title}» у ${item.target.rank}${item.target.symbol}.`,
+        `глушитель ${item.nullifier.rank}${item.nullifier.symbol} отменил Эффект «${item.effect.title}» у ${item.target.rank}${item.target.symbol}.`,
         { kind: 'effect' }
       );
     }
@@ -469,7 +469,7 @@ export class DurakGame {
     }
 
     if (outcome?.applied && outcome.message) {
-      recordEvent(this.state, `эффект ${card.rank}${card.symbol}: ${outcome.message}.`, { kind: 'effect' });
+      recordEvent(this.state, `Эффект ${card.rank}${card.symbol}: ${outcome.message}.`, { kind: 'effect' });
     }
 
     return outcome;

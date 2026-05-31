@@ -878,6 +878,7 @@ body.is-dragging-card .effect-tooltip {
   margin: -34px -26px -24px;
   padding: 34px 26px 24px;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .player-hand {
@@ -891,6 +892,7 @@ body.is-dragging-card .effect-tooltip {
   border-radius: 0;
   background: transparent;
   overflow: visible;
+  pointer-events: auto;
   transition: transform 180ms ease;
   will-change: transform;
 }
