@@ -265,8 +265,8 @@ export class GameRenderer {
 
     this.renderedBattleCardIds = currentCardIds;
 
-    const roleText = state.playerRole === 'attacker' ? 'Атакуйте или подкиньте карту' : 'Отбейтесь, переведите или возьмите';
-    this.elements.tableHint.textContent = state.battle.length ? roleText : 'Перетащите карту на поле';
+    const roleText = state.playerRole === 'attacker' ? 'Атакуйте или подкиньте карту на стол' : 'Отбейтесь картой из руки, переведите или возьмите карты';
+    this.elements.tableHint.textContent = state.battle.length ? roleText : 'Перетащите карту из руки на стол';
   }
 
   shouldHideCard(cardId) {
