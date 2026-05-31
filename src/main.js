@@ -1,4 +1,5 @@
 import { createGame } from './game/game.js';
+import { shouldAiAct } from './game/turn-order.js';
 import { DragController } from './ui/drag.js';
 import { GameRenderer } from './ui/render.js';
 
@@ -44,20 +45,6 @@ function aiThinkDelay() {
   return AI_THINK_MIN_MS + Math.random() * (AI_THINK_MAX_MS - AI_THINK_MIN_MS);
 }
 
-function attackPositionsOverlap(a, b) {
-  return Math.abs(a.x - b.x) < 0.14 && Math.abs(a.y - b.y) < 0.22;
-}
-
-function shouldAnimateAttackShift(target) {
-  if (target.id !== 'table') return false;
-  if (currentState.playerRole !== 'attacker') return false;
-  if (!currentState.battle.length) return false;
-
-  return currentState.battle.some((slot) => (
-    !slot.isDefended && attackPositionsOverlap(target.position, slot.attackPosition)
-  ));
-}
-
 async function waitForOpponentThinking() {
   renderer.setOpponentThinking(true);
   try {
@@ -88,37 +75,9 @@ function battleCardIds(state) {
   return new Set(battleEntries(state).map((entry) => entry.card.id));
 }
 
-function isBattleSlotDefended(slot) {
-  const defenseCount = slot.defenses?.length ?? (slot.defense ? 1 : 0);
-  return defenseCount >= (slot.requiredDefenseCount ?? 1);
-}
-
 function getNewBattleEntries(previousState, nextState) {
   const previousIds = battleCardIds(previousState);
   return battleEntries(nextState).filter((entry) => !previousIds.has(entry.card.id));
-}
-
-function getBattleClearAnimation(previousState, nextState) {
-  if (!previousState.battle.length || nextState.battle.length) return null;
-
-  if (nextState.lastEvent.includes('взял') || nextState.lastEvent.includes('взяли')) {
-    const actor = nextState.lastEvent.startsWith('Вы') ? 'player' : 'ai';
-    return { kind: 'take', actor };
-  }
-
-  if (nextState.lastEvent.includes('бито')) {
-    return { kind: 'discard', actor: null };
-  }
-
-  return null;
-}
-
-function shouldAiAct(state) {
-  if (state.phase !== 'playing') return false;
-  if (state.attacker === 'ai' && state.battle.length === 0) return true;
-  if (state.defender === 'ai' && state.battle.some((slot) => !isBattleSlotDefended(slot))) return true;
-  if (state.attacker === 'ai' && state.battle.length > 0 && state.battle.every((slot) => isBattleSlotDefended(slot))) return true;
-  return false;
 }
 
 async function renderResult(result, options = {}) {
@@ -130,16 +89,12 @@ async function renderResult(result, options = {}) {
   }
 
   const previousState = currentState;
-  const clearAnimation = getBattleClearAnimation(previousState, result.state);
-  if (clearAnimation) {
-    const countAnimation = clearAnimation.kind === 'discard'
-      ? renderer.animateDiscardCount(previousState.discardCount, result.state.discardCount)
-      : Promise.resolve();
-    await Promise.all([
-      renderer.animateBattleClear(clearAnimation.kind, clearAnimation.actor),
-      countAnimation
-    ]);
-  }
+  const transitions = result.transitions ?? [];
+  await renderer.playTransitions(transitions, {
+    phase: 'before-render',
+    previousState,
+    nextState: result.state
+  });
 
   const newEntries = getNewBattleEntries(previousState, result.state);
   const animatedAiEntry = options.animateAiCards
@@ -225,22 +180,31 @@ async function startNewGame() {
 }
 
 function handleDrop(cardId, target) {
-  const shiftFromPosition = shouldAnimateAttackShift(target) ? target.position : null;
-
   return runAction(
     () => game.playCardToTargetAt(cardId, target.id, target.position),
     {
       suppressEnterCardIds: [cardId],
-      impactCardId: cardId,
-      shiftFromPosition
+      impactCardId: cardId
     }
   );
 }
 
+async function handleTableMove(groupId, position) {
+  if (isAnimating) return false;
+
+  const result = game.moveTableGroup(groupId, position);
+  currentState = result.state;
+  renderer.render(currentState);
+  if (result.error) renderer.flashError(result.error);
+  return result.ok;
+}
+
 new DragController({
   hand: elements.playerHand,
+  table: elements.battleRow,
   getState: () => currentState,
   onDrop: handleDrop,
+  onMoveTableGroup: handleTableMove,
   onDragStart: () => renderer.hideEffectTooltip(),
   onDragEnd: () => renderer.hideEffectTooltip()
 });

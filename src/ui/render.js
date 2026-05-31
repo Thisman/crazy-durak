@@ -2,6 +2,7 @@ import { cardLabel } from '../game/cards.js';
 import { GameAnimations } from './animations.js';
 
 const EFFECT_TOOLTIP_GAP = 40;
+const EFFECT_TOOLTIP_MARGIN = 10;
 
 function clear(element) {
   element.replaceChildren();
@@ -17,6 +18,10 @@ function nextFrame() {
 
 function prefersReducedMotion() {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function createCardElement(card, options = {}) {
@@ -54,6 +59,7 @@ function createActiveEffectIcon(card, actor) {
 
   const icon = document.createElement('span');
   icon.className = `active-effect-icon active-effect-${owner}`;
+  icon.dataset.cardId = card.id;
   icon.dataset.effectTitle = card.effectTitle;
   icon.dataset.effectDescription = card.effectDescription ?? '';
   icon.dataset.effectIcon = card.effectIcon ?? 'fa-solid fa-star';
@@ -166,7 +172,8 @@ export class GameRenderer {
     this.state = state;
     this.renderOptions = {
       hiddenCardIds: new Set(options.hiddenCardIds ?? []),
-      suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? [])
+      suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? []),
+      effectPulseIds: new Set(state.effectPulseIds ?? [])
     };
     this.elements.battleNumber.textContent = String(state.battleNumber);
     this.setDiscardCount(state.discardCount);
@@ -196,16 +203,20 @@ export class GameRenderer {
     state.battle.forEach((slot, slotIndex) => {
       const pair = document.createElement('div');
       pair.className = 'battle-slot';
+      pair.dataset.dragGroupId = slot.groupId ?? slot.attack.dragGroupId ?? '';
       if (!slot.isDefended) pair.dataset.dropTarget = `attack-card:${slot.attack.id}`;
       setSlotPosition(pair, slot.attackPosition);
 
-      const slotBaseZ = slot.isDefended ? 0 : 10000;
       const attackOrder = playOrder(slot.attackOrder, slotIndex * 20 + 1);
-      const attackZ = slotBaseZ + attackOrder * 2;
+      const attackZ = slot.attack.zIndex ?? slot.attackZIndex ?? attackOrder * 2;
       const attack = createCardElement(slot.attack, {
         className: 'table-card attack-card'
       });
+      attack.dataset.draggable = 'true';
+      attack.dataset.dragKind = 'table';
+      attack.dataset.dragGroupId = slot.groupId ?? slot.attack.dragGroupId ?? '';
       setCardZ(attack, attackZ);
+      if (this.shouldPulseEffect(slot.attack.id)) attack.classList.add('effect-trigger');
       if (slot.isDefended) {
         attack.classList.add('is-beaten-card');
       } else {
@@ -227,11 +238,17 @@ export class GameRenderer {
           });
           const layout = defenseLayout(slot, index, battleRect);
           const defenseOrder = playOrder(slot.defenseOrders?.[index] ?? slot.defenseOrder, slotIndex * 20 + index + 2);
-          const defenseZ = slotBaseZ + Math.max(defenseOrder * 2, attackOrder * 2 + index + 1);
+          const defenseZ = defenseCard.zIndex
+            ?? slot.defenseZIndexes?.[index]
+            ?? Math.max(defenseOrder * 2, attackOrder * 2 + index + 1);
           defense.style.setProperty('--defense-x', `${layout.x}px`);
           defense.style.setProperty('--defense-y', `${layout.y}px`);
           defense.style.setProperty('--defense-rotation', `${layout.rotation}deg`);
+          defense.dataset.draggable = 'true';
+          defense.dataset.dragKind = 'table';
+          defense.dataset.dragGroupId = slot.groupId ?? defenseCard.dragGroupId ?? '';
           setCardZ(defense, defenseZ);
+          if (this.shouldPulseEffect(defenseCard.id)) defense.classList.add('effect-trigger');
           if (slot.isDefended) {
             defense.classList.add('is-beaten-card');
           } else {
@@ -261,6 +278,10 @@ export class GameRenderer {
     if (this.renderOptions?.hiddenCardIds.has(cardId)) return false;
     if (this.renderOptions?.suppressEnterCardIds.has(cardId)) return false;
     return true;
+  }
+
+  shouldPulseEffect(cardId) {
+    return this.renderOptions?.effectPulseIds.has(cardId) ?? false;
   }
 
   renderActiveEffects(state) {
@@ -296,6 +317,7 @@ export class GameRenderer {
   appendActiveEffectIcon(card, actor, aiStack, playerStack) {
     const icon = createActiveEffectIcon(card, actor);
     if (!icon) return;
+    if (this.shouldPulseEffect(card.id)) icon.classList.add('effect-trigger');
     (actor === 'ai' ? aiStack : playerStack).append(icon);
   }
 
@@ -305,6 +327,9 @@ export class GameRenderer {
     for (const card of state.playerHand) {
       const targets = state.legalTargets[card.id] ?? [];
       const cardElement = createCardElement(card, { interactive: true, className: 'hand-card' });
+      cardElement.dataset.draggable = card.canDrag === false ? 'false' : 'true';
+      cardElement.dataset.dragKind = 'hand';
+      if (this.shouldPulseEffect(card.id)) cardElement.classList.add('effect-trigger');
       cardElement.dataset.dropTargets = targets.join(',');
       cardElement.disabled = targets.length === 0;
       cardElement.classList.toggle('is-valid', Boolean(card.isValid));
@@ -320,8 +345,12 @@ export class GameRenderer {
 
     const visibleCards = Math.min(9, state.aiCardCount);
     for (let index = 0; index < visibleCards; index += 1) {
-      const card = createCardBackElement();
-      this.elements.opponentHand.append(card);
+      const previewCard = state.aiHandPreview?.[index] ?? null;
+      const cardElement = previewCard
+        ? createCardElement(previewCard, { className: 'opponent-revealed-card' })
+        : createCardBackElement();
+      if (previewCard && this.shouldPulseEffect(previewCard.id)) cardElement.classList.add('effect-trigger');
+      this.elements.opponentHand.append(cardElement);
     }
 
     if (state.aiCardCount > visibleCards) {
@@ -370,6 +399,7 @@ export class GameRenderer {
 
       const item = document.createElement('li');
       item.className = 'event-item';
+      if (event.kind === 'effect') item.classList.add('event-effect');
       item.innerHTML = '<p></p>';
       item.querySelector('p').textContent = event.message;
       this.elements.eventLog.append(item);
@@ -537,6 +567,19 @@ export class GameRenderer {
     await this.animations.play('battle-clear', { kind, actor });
   }
 
+  async playTransitions(transitions = [], context = {}) {
+    const clearTransition = transitions.find((transition) => transition.type === 'battle-clear');
+    if (!clearTransition || context.phase !== 'before-render') return;
+
+    const countAnimation = clearTransition.kind === 'discard'
+      ? this.animateDiscardCount(context.previousState?.discardCount, context.nextState?.discardCount)
+      : Promise.resolve();
+    await Promise.all([
+      this.animateBattleClear(clearTransition.kind, clearTransition.actor),
+      countAnimation
+    ]);
+  }
+
   setDiscardCount(value) {
     this.elements.discardCount.textContent = String(value);
   }
@@ -599,25 +642,21 @@ export class GameRenderer {
 
   bindEffectTooltip() {
     if (!this.elements.effectTooltip || !this.elements.gameScreen) return;
-    const tooltip = this.elements.effectTooltip;
 
     this.elements.gameScreen.addEventListener('pointerover', (event) => {
-      if (tooltip.contains(event.target)) return;
       const effectTarget = this.getEffectTooltipTarget(event.target);
       if (effectTarget && effectTarget === this.effectTooltipTarget) return;
-      if (effectTarget) this.showEffectTooltip(effectTarget);
+      if (effectTarget) {
+        this.showEffectTooltip(effectTarget);
+        return;
+      }
+      this.hideEffectTooltip();
     });
 
     this.elements.gameScreen.addEventListener('pointerout', (event) => {
-      if (tooltip.contains(event.target)) {
-        const nextEffectTarget = this.getEffectTooltipTarget(event.relatedTarget);
-        if (!tooltip.contains(event.relatedTarget) && !nextEffectTarget) this.hideEffectTooltip();
-        return;
-      }
-
       const effectTarget = this.getEffectTooltipTarget(event.target);
       if (!effectTarget) return;
-      if (effectTarget.contains(event.relatedTarget) || tooltip.contains(event.relatedTarget)) return;
+      if (effectTarget.contains(event.relatedTarget)) return;
       this.hideEffectTooltip();
     });
 
@@ -635,7 +674,7 @@ export class GameRenderer {
 
   getEffectTooltipTarget(target) {
     if (!(target instanceof Element)) return null;
-    return target.closest('.card.has-effect[data-effect-title]');
+    return target.closest('.card.has-effect[data-effect-title], .active-effect-icon[data-effect-title]');
   }
 
   showEffectTooltip(cardElement) {
@@ -645,10 +684,22 @@ export class GameRenderer {
     tooltip.querySelector('.effect-tooltip-icon').innerHTML = `<i class="${cardElement.dataset.effectIcon}"></i>`;
 
     const rect = cardElement.getBoundingClientRect();
-    tooltip.style.left = `${rect.left + rect.width / 2}px`;
-    tooltip.style.top = `${rect.top - EFFECT_TOOLTIP_GAP}px`;
-    this.effectTooltipTarget = cardElement;
+    tooltip.style.visibility = 'hidden';
+    tooltip.style.transform = 'none';
     tooltip.classList.remove('is-hidden');
+
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const maxLeft = Math.max(EFFECT_TOOLTIP_MARGIN, window.innerWidth - tooltipRect.width - EFFECT_TOOLTIP_MARGIN);
+    const maxTop = Math.max(EFFECT_TOOLTIP_MARGIN, window.innerHeight - tooltipRect.height - EFFECT_TOOLTIP_MARGIN);
+    const centeredLeft = rect.left + rect.width / 2 - tooltipRect.width / 2;
+    const aboveTop = rect.top - EFFECT_TOOLTIP_GAP - tooltipRect.height;
+    const belowTop = rect.bottom + EFFECT_TOOLTIP_MARGIN;
+    const top = aboveTop >= EFFECT_TOOLTIP_MARGIN ? aboveTop : belowTop;
+
+    tooltip.style.left = `${clamp(centeredLeft, EFFECT_TOOLTIP_MARGIN, maxLeft)}px`;
+    tooltip.style.top = `${clamp(top, EFFECT_TOOLTIP_MARGIN, maxTop)}px`;
+    tooltip.style.visibility = '';
+    this.effectTooltipTarget = cardElement;
   }
 
   hideEffectTooltip() {

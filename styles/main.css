@@ -270,6 +270,14 @@ button:disabled {
   height: var(--card-h);
 }
 
+.opponent-hand .card {
+  flex: 0 0 var(--card-w);
+}
+
+.opponent-revealed-card {
+  box-shadow: 5px 5px 0 var(--accent-soft);
+}
+
 .opponent-extra {
   display: grid;
   flex: 0 0 auto;
@@ -320,6 +328,7 @@ button:disabled {
   display: grid;
   justify-items: center;
   gap: 5px;
+  margin-bottom: 25px;
 }
 
 .deck-counter {
@@ -395,6 +404,11 @@ button:disabled {
   scrollbar-color: var(--accent) var(--surface);
 }
 
+.event-log,
+.event-log * {
+  text-transform: none;
+}
+
 .event-item {
   padding: 0 0 12px;
   border-radius: 0;
@@ -425,6 +439,16 @@ button:disabled {
   color: var(--ink);
   font-size: 9px;
   line-height: 1.7;
+}
+
+.event-effect p {
+  display: inline-block;
+  padding: 4px 7px;
+  border: 2px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--line);
+  text-transform: none;
+  animation: effectTextPulse 420ms steps(5, end) both;
 }
 
 .event-empty {
@@ -596,7 +620,7 @@ button:disabled {
 
 .attack-card.is-beaten-card {
   z-index: 1;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .attack-card.is-beaten-card.card-enter {
@@ -612,7 +636,7 @@ button:disabled {
 
 .defense-card.is-beaten-card {
   z-index: 2;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .defense-card.is-beaten-card.card-enter {
@@ -662,6 +686,7 @@ button:disabled {
   position: absolute;
   right: 8px;
   top: 8px;
+  z-index: 4;
   display: grid;
   width: 25px;
   height: 25px;
@@ -673,6 +698,24 @@ button:disabled {
   font-size: 11px;
   box-shadow: 3px 3px 0 var(--line-dim);
   pointer-events: none;
+}
+
+.card.effect-trigger::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: 3;
+  border: 3px solid var(--accent);
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 7px var(--accent-soft);
+  pointer-events: none;
+  animation: effectFramePulse 560ms steps(8, end) both;
+  will-change: transform, opacity;
+}
+
+.card.effect-trigger > .effect-badge {
+  animation: effectBadgePulse 560ms steps(8, end) both;
 }
 
 .active-effects {
@@ -713,6 +756,14 @@ button:disabled {
   color: var(--accent);
   font-size: 10px;
   box-shadow: 3px 3px 0 var(--line-dim);
+  pointer-events: auto;
+}
+
+.active-effect-icon.effect-trigger {
+  animation: effectIconPulse 560ms steps(8, end) both;
+}
+
+body.is-dragging-card .active-effect-icon {
   pointer-events: none;
 }
 
@@ -730,8 +781,8 @@ button:disabled {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 5px 5px 0 var(--line-dim);
-  pointer-events: auto;
-  transform: translate(-50%, -100%);
+  pointer-events: none;
+  transform: none;
 }
 
 .effect-tooltip::after {
@@ -908,22 +959,14 @@ body.is-dragging-card .effect-tooltip {
   animation: aiThinkingLoader 720ms steps(3, end) infinite;
 }
 
-.battle-row.battle-animate-discard .card {
-  --collapse-glow: var(--accent);
-}
-
-.battle-row.battle-animate-take .card {
-  --collapse-glow: var(--line);
-}
-
 .battle-row.battle-animate-discard .attack-card,
 .battle-row.battle-animate-take .attack-card {
-  animation: battleAttackCollapse 600ms steps(10, end) both;
+  animation: battleCardFade 240ms steps(5, end) both;
 }
 
 .battle-row.battle-animate-discard .defense-card,
 .battle-row.battle-animate-take .defense-card {
-  animation: battleDefenseCollapse 600ms steps(10, end) both;
+  animation: battleCardFade 240ms steps(5, end) both;
 }
 
 .is-battle-cleared {
@@ -969,6 +1012,15 @@ body.is-dragging-card .effect-tooltip {
   will-change: transform;
 }
 
+.table-drag-ghost {
+  background: transparent;
+  box-shadow: none;
+}
+
+.table-drag-ghost .table-card {
+  pointer-events: none;
+}
+
 .ai-flight-card {
   position: fixed;
   z-index: 70;
@@ -1007,6 +1059,32 @@ body.is-dragging-card .effect-tooltip {
 }
 
 .impact-particles span:nth-child(3n) {
+  background: var(--accent);
+}
+
+.clear-particles {
+  position: absolute;
+  z-index: 22;
+  width: 1px;
+  height: 1px;
+  contain: layout paint style;
+  pointer-events: none;
+}
+
+.clear-particles span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--line);
+  box-shadow: 0 0 0 2px var(--surface);
+  animation: clearParticle 300ms steps(5, end) both;
+  will-change: transform, opacity;
+}
+
+.clear-particles-discard span:nth-child(2n),
+.clear-particles-take span:nth-child(3n) {
   background: var(--accent);
 }
 
@@ -1187,6 +1265,94 @@ body.is-dragging-card .effect-tooltip {
   }
 }
 
+@keyframes clearParticle {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  16% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y)));
+  }
+}
+
+@keyframes effectFramePulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  46% {
+    opacity: 0.82;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes effectBadgePulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 var(--line-dim);
+  }
+
+  38% {
+    transform: scale(1.34);
+    box-shadow: 5px 5px 0 var(--accent-soft);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 var(--line-dim);
+  }
+}
+
+@keyframes effectIconPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 var(--line-dim);
+  }
+
+  36% {
+    transform: scale(1.22);
+    color: var(--ink);
+    background: var(--accent);
+    box-shadow: 5px 5px 0 var(--accent-soft);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 3px 3px 0 var(--line-dim);
+  }
+}
+
+@keyframes effectTextPulse {
+  0% {
+    text-shadow: none;
+  }
+
+  44% {
+    text-shadow: 2px 2px 0 var(--line-dim);
+  }
+
+  100% {
+    text-shadow: none;
+  }
+}
+
 @keyframes counterStep {
   0% {
     transform: scale(1);
@@ -1201,53 +1367,13 @@ body.is-dragging-card .effect-tooltip {
   }
 }
 
-@keyframes battleAttackCollapse {
+@keyframes battleCardFade {
   0% {
-    transform: translate(-50%, -50%) scale(1);
-    filter: contrast(1);
-    box-shadow: 5px 5px 0 var(--line-dim);
-  }
-
-  24% {
-    transform: translate(-50%, -50%) scale(1.1, 0.82) rotate(-1deg);
-    box-shadow: 8px 8px 0 var(--collapse-glow, var(--line));
-  }
-
-  58% {
-    transform: translate(-50%, -50%) scale(0.58, 1.08) rotate(1deg);
-    filter: contrast(1.35);
-    box-shadow: 0 0 0 8px var(--collapse-glow, var(--line));
+    opacity: 1;
   }
 
   100% {
-    transform: translate(-50%, -50%) scale(0.04, 0.04) rotate(-4deg);
-    filter: contrast(1.8);
-    box-shadow: 0 0 0 0 var(--collapse-glow, var(--line));
-  }
-}
-
-@keyframes battleDefenseCollapse {
-  0% {
-    transform: translate(-50%, -50%) rotate(var(--defense-rotation, 7deg)) scale(1);
-    filter: contrast(1);
-    box-shadow: 5px 5px 0 var(--line-dim);
-  }
-
-  24% {
-    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) - 1deg)) scale(1.1, 0.82);
-    box-shadow: 8px 8px 0 var(--collapse-glow, var(--line));
-  }
-
-  58% {
-    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) + 1deg)) scale(0.58, 1.08);
-    filter: contrast(1.35);
-    box-shadow: 0 0 0 8px var(--collapse-glow, var(--line));
-  }
-
-  100% {
-    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) - 4deg)) scale(0.04, 0.04);
-    filter: contrast(1.8);
-    box-shadow: 0 0 0 0 var(--collapse-glow, var(--line));
+    opacity: 0;
   }
 }
 

@@ -5,44 +5,49 @@ const RETURN_IMPACT_DURATION_MS = 280;
 export class DragController {
   constructor(options) {
     this.hand = options.hand;
+    this.table = options.table ?? document.querySelector('#battle-row');
     this.getState = options.getState;
     this.onDrop = options.onDrop;
+    this.onMoveTableGroup = options.onMoveTableGroup ?? (() => false);
     this.onDragStart = options.onDragStart ?? (() => {});
     this.onDragEnd = options.onDragEnd ?? (() => {});
     this.active = null;
 
     this.hand.addEventListener('pointerdown', (event) => this.onPointerDown(event));
+    this.table?.addEventListener('pointerdown', (event) => this.onPointerDown(event));
   }
 
   onPointerDown(event) {
-    const source = event.target.closest('.hand-card');
+    const source = event.target.closest('[data-draggable="true"][data-card-id]');
     if (document.querySelector('.game-screen')?.classList.contains('is-locked')) return;
-    if (!source || source.disabled || event.button !== 0) return;
+    if (!source || event.button !== 0) return;
+
+    const kind = source.dataset.dragKind ?? (source.classList.contains('hand-card') ? 'hand' : 'table');
+    if (kind === 'hand' && source.disabled) return;
 
     const state = this.getState();
     const cardId = source.dataset.cardId;
-    const targets = state.legalTargets[cardId] ?? [];
-    if (targets.length === 0) return;
+    const targets = kind === 'hand' ? (state.legalTargets[cardId] ?? []) : [];
+    if (kind === 'hand' && targets.length === 0) return;
+    if (kind === 'table' && !source.dataset.dragGroupId) return;
 
     event.preventDefault();
     source.setPointerCapture?.(event.pointerId);
 
     const targetSet = new Set(targets);
-    const dropTargets = this.collectDropTargets(targetSet);
-    const ghost = source.cloneNode(true);
-    ghost.classList.add('drag-ghost');
-    source.classList.add('is-drag-source');
-
-    const sourceRect = source.getBoundingClientRect();
-    ghost.style.width = `${sourceRect.width}px`;
-    ghost.style.height = `${sourceRect.height}px`;
+    const dropTargets = kind === 'hand' ? this.collectDropTargets(targetSet) : [];
+    const { ghost, sourceRect, hiddenSources } = this.createGhost(source, kind);
+    hiddenSources.forEach((item) => item.classList.add('is-drag-source'));
     document.body.append(ghost);
 
     this.active = {
       pointerId: event.pointerId,
+      kind,
       cardId,
+      groupId: source.dataset.dragGroupId ?? null,
       source,
       sourceRect,
+      hiddenSources,
       ghost,
       offsetX: sourceRect.width / 2,
       offsetY: sourceRect.height / 2,
@@ -54,7 +59,7 @@ export class DragController {
       lastClientY: event.clientY
     };
 
-    this.onDragStart({ cardId, source });
+    this.onDragStart({ cardId, source, kind, groupId: this.active.groupId });
     document.body.classList.add('is-dragging-card');
     this.markEligibleTargets(dropTargets);
     this.moveGhost(event.clientX, event.clientY);
@@ -62,6 +67,26 @@ export class DragController {
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerCancel);
+  }
+
+  createGhost(source, kind) {
+    if (kind === 'table') {
+      const slot = source.closest('.battle-slot') ?? source;
+      const sourceRect = slot.getBoundingClientRect();
+      const ghost = slot.cloneNode(true);
+      ghost.classList.add('drag-ghost', 'table-drag-ghost');
+      ghost.style.width = `${sourceRect.width}px`;
+      ghost.style.height = `${sourceRect.height}px`;
+      ghost.querySelectorAll('[data-drop-target]').forEach((item) => item.removeAttribute('data-drop-target'));
+      return { ghost, sourceRect, hiddenSources: [slot] };
+    }
+
+    const sourceRect = source.getBoundingClientRect();
+    const ghost = source.cloneNode(true);
+    ghost.classList.add('drag-ghost');
+    ghost.style.width = `${sourceRect.width}px`;
+    ghost.style.height = `${sourceRect.height}px`;
+    return { ghost, sourceRect, hiddenSources: [source] };
   }
 
   onPointerMove = (event) => {
@@ -92,24 +117,33 @@ export class DragController {
     this.moveGhost(event.clientX, event.clientY);
     this.updateActiveTarget(event.clientX, event.clientY);
 
-    const targetId = this.active.currentTarget?.dataset.dropTarget ?? null;
     const active = this.active;
-    const drop = targetId ? {
-      id: targetId,
-      position: this.getTablePosition(event.clientX, event.clientY)
-    } : null;
+    const position = this.getTablePosition(event.clientX, event.clientY);
+    const targetId = active.currentTarget?.dataset.dropTarget ?? null;
+    const drop = targetId ? { id: targetId, position } : null;
+    const tableMove = active.kind === 'table' && this.isTablePoint(event.clientX, event.clientY)
+      ? { groupId: active.groupId, position }
+      : null;
 
     this.cleanupTargetClasses();
 
-    if (drop) {
+    if (drop || tableMove) {
       this.detachWindowEvents();
       this.active = null;
-      this.onDragEnd({ cardId: active.cardId, source: active.source, dropped: true });
-      const dropResult = this.onDrop(active.cardId, drop);
+      this.onDragEnd({
+        cardId: active.cardId,
+        source: active.source,
+        kind: active.kind,
+        groupId: active.groupId,
+        dropped: true
+      });
+      const dropResult = drop
+        ? this.onDrop(active.cardId, drop)
+        : this.onMoveTableGroup(tableMove.groupId, tableMove.position);
       Promise.resolve(dropResult).catch((error) => console.error(error));
       window.requestAnimationFrame(() => {
         active.ghost.remove();
-        active.source.classList.remove('is-drag-source');
+        this.restoreSources(active);
       });
       return;
     }
@@ -124,11 +158,15 @@ export class DragController {
   };
 
   moveGhost(clientX, clientY) {
-    const { ghost, offsetX, offsetY } = this.active;
-    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${DRAG_SCALE}) rotate(-1deg)`;
+    const { ghost, offsetX, offsetY, kind } = this.active;
+    const scale = kind === 'table' ? 1 : DRAG_SCALE;
+    const rotation = kind === 'table' ? '0deg' : '-1deg';
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${scale}) rotate(${rotation})`;
   }
 
   updateActiveTarget(clientX, clientY) {
+    if (this.active.kind === 'table') return;
+
     const target = this.active.dropTargets.find((item) => (
       clientX >= item.rect.left
         && clientX <= item.rect.right
@@ -179,8 +217,12 @@ export class DragController {
     }
   }
 
+  getTableLayer() {
+    return document.querySelector('#battle-row') ?? document.querySelector('#table-drop-zone');
+  }
+
   getTablePosition(clientX, clientY) {
-    const layer = document.querySelector('#battle-row') ?? document.querySelector('#table-drop-zone');
+    const layer = this.getTableLayer();
     const rect = layer.getBoundingClientRect();
     const x = (clientX - rect.left) / Math.max(1, rect.width);
     const y = (clientY - rect.top) / Math.max(1, rect.height);
@@ -191,6 +233,14 @@ export class DragController {
     };
   }
 
+  isTablePoint(clientX, clientY) {
+    const rect = this.getTableLayer().getBoundingClientRect();
+    return clientX >= rect.left
+      && clientX <= rect.right
+      && clientY >= rect.top
+      && clientY <= rect.bottom;
+  }
+
   cleanupTargetClasses() {
     document.querySelectorAll('.drop-eligible, .drop-active').forEach((element) => {
       element.classList.remove('drop-eligible', 'drop-active');
@@ -198,15 +248,25 @@ export class DragController {
     document.body.classList.remove('is-dragging-card');
   }
 
+  restoreSources(active) {
+    active.hiddenSources?.forEach((source) => source.classList.remove('is-drag-source'));
+  }
+
   animateBack(active) {
-    const { ghost, source } = active;
+    const { ghost, source, kind } = active;
     const startTransform = ghost.style.transform;
-    const targetRect = source.getBoundingClientRect();
+    const targetRect = (kind === 'table' ? source.closest('.battle-slot') : source).getBoundingClientRect();
     const endTransform = `translate3d(${targetRect.left}px, ${targetRect.top}px, 0) scale(1) rotate(0deg)`;
 
     this.detachWindowEvents();
     this.active = null;
-    this.onDragEnd({ cardId: active.cardId, source, dropped: false });
+    this.onDragEnd({
+      cardId: active.cardId,
+      source,
+      kind,
+      groupId: active.groupId,
+      dropped: false
+    });
 
     ghost.classList.add('is-returning');
     ghost.style.transition = 'none';
@@ -223,13 +283,14 @@ export class DragController {
 
     animation.finished.catch(() => {}).then(() => {
       animation.cancel();
-      source.classList.add('card-return-impact');
-      source.classList.remove('is-drag-source');
+      if (kind === 'hand') {
+        source.classList.add('card-return-impact');
+        const cleanupImpact = () => source.classList.remove('card-return-impact');
+        source.addEventListener('animationend', cleanupImpact, { once: true });
+        window.setTimeout(cleanupImpact, RETURN_IMPACT_DURATION_MS + 60);
+      }
+      this.restoreSources(active);
       ghost.remove();
-
-      const cleanupImpact = () => source.classList.remove('card-return-impact');
-      source.addEventListener('animationend', cleanupImpact, { once: true });
-      window.setTimeout(cleanupImpact, RETURN_IMPACT_DURATION_MS + 60);
     });
   }
 

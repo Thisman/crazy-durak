@@ -2,9 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeck } from '../src/game/cards.js';
 import { createGameFromState } from '../src/game/game.js';
-import { createCardModel, createFieldModel } from '../src/game/model.js';
+import { CARD_STATES, canCardBeatAttack, createCardModel, createFieldModel } from '../src/game/model.js';
 import { MAX_THROW_INS, canBeat } from '../src/game/rules.js';
-import { EFFECT_DEFINITIONS, EFFECT_IDS, assignRandomEffects } from '../src/game/effects.js';
+import { EFFECT_DEFINITIONS, EFFECT_IDS, assignRandomEffects, createEffect } from '../src/game/effects.js';
+import { getDragGroup, getSlotZModel, moveTableGroup } from '../src/game/table-model.js';
+import {
+  TRANSITION_TYPES,
+  createBattleClearTransition,
+  createCardActionTransitions,
+  normalizeTransitions
+} from '../src/game/transitions.js';
 
 function card(id, rank, suit, value) {
   const symbols = { hearts: '♥', spades: '♠', clubs: '♣', diamonds: '♦' };
@@ -201,7 +208,7 @@ test('stores player drop position for attack cards', () => {
   assert.deepEqual(result.state.battle[0].attackPosition, { x: 0.72, y: 0.18 });
 });
 
-test('shifts a new active attack away from an overlapping active attack', () => {
+test('keeps overlapping throw-in drop position instead of forcing a shift', () => {
   const firstAttack = card('attack-9h', '9', 'hearts');
   const secondAttack = card('attack-9s', '9', 'spades');
   const game = gameFrom(state({
@@ -220,13 +227,11 @@ test('shifts a new active attack away from an overlapping active attack', () => 
 
   const result = game.throwIn(secondAttack.id, { x: 0.5, y: 0.5 });
   assert.equal(result.ok, true);
-  assert.equal(result.state.battle[1].attackPosition.y, 0.5);
-  assert.notEqual(result.state.battle[1].attackPosition.x, 0.5);
-  assert.equal(Math.abs(result.state.battle[1].attackPosition.x - result.state.battle[0].attackPosition.x) >= 0.14, true);
+  assert.deepEqual(result.state.battle[1].attackPosition, { x: 0.5, y: 0.5 });
   assert.equal(result.state.battle[1].attackOrder, 2);
 });
 
-test('does not shift transfer cards even when dropped over an active attack', () => {
+test('keeps transfer drop position instead of forcing a shift', () => {
   const attack = card('attack-7h', '7', 'hearts');
   const transfer = card('transfer-7c', '7', 'clubs');
   const game = gameFrom(state({
@@ -242,6 +247,34 @@ test('does not shift transfer cards even when dropped over an active attack', ()
   const result = game.playCardToTargetAt(transfer.id, 'table', { x: 0.5, y: 0.5 });
   assert.equal(result.ok, true);
   assert.deepEqual(result.state.battle[1].attackPosition, { x: 0.5, y: 0.5 });
+});
+
+test('keeps throw-in position when dropped over defended cards', () => {
+  const attack = card('attack-9h', '9', 'hearts');
+  const defense = card('defense-10h', '10', 'hearts');
+  const throwCard = card('throw-10c', '10', 'clubs');
+  const game = gameFrom(state({
+    attacker: 'player',
+    defender: 'ai',
+    hands: { player: [throwCard], ai: Array.from({ length: 6 }, (_, index) => card(`ai-${index}`, 'A', 'clubs')) },
+    battle: [{
+      attack,
+      defense,
+      defenses: [defense],
+      attackPosition: { x: 0.5, y: 0.5 },
+      defensePosition: { x: 0.54, y: 0.58 },
+      defensePositions: [{ x: 0.54, y: 0.58 }],
+      attackOrder: 1,
+      defenseOrder: 2,
+      defenseOrders: [2]
+    }],
+    defenderStartHandCount: 6,
+    nextPlayOrder: 3
+  }));
+
+  const result = game.throwIn(throwCard.id, { x: 0.54, y: 0.58 });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.state.battle[1].attackPosition, { x: 0.54, y: 0.58 });
 });
 
 test('card model exposes validity from cards currently in play', () => {
@@ -263,6 +296,111 @@ test('card model exposes validity from cards currently in play', () => {
   assert.equal(Array.isArray(field.deckCards), true);
   assert.equal(Array.isArray(field.enemyCards), true);
   assert.equal(Array.isArray(field.playerCards), true);
+});
+
+test('card model exposes hand, played, and beaten states with lifecycle hooks', () => {
+  const attack = card('attack-9h', '9', 'hearts');
+  const defense = card('defense-10h', '10', 'hearts');
+  const playable = card('playable-10s', '10', 'spades');
+  const dead = card('dead-2c', '2', 'clubs');
+  const aiHand = card('ai-hand', 'A', 'clubs');
+  const handState = state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [playable, dead], ai: [aiHand] },
+    battle: [{ attack, defense: null, defenses: [], source: 'ai' }],
+    defenderStartHandCount: 2
+  });
+  const tableState = state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [], ai: [aiHand] },
+    battle: [{ attack, defense, defenses: [defense], source: 'ai', defenseSources: ['player'] }],
+    defenderStartHandCount: 2
+  });
+
+  const playableModel = createCardModel(playable, handState, 'player');
+  const deadModel = createCardModel(dead, handState, 'player');
+  const aiHandModel = createCardModel(aiHand, handState, 'player');
+  const attackModel = createCardModel(attack, tableState, 'player');
+  const defenseModel = createCardModel(defense, tableState, 'player');
+
+  assert.equal(playableModel.state, CARD_STATES.VALID);
+  assert.equal(deadModel.state, CARD_STATES.INVALID);
+  assert.equal(aiHandModel.state, CARD_STATES.IN_HAND);
+  assert.equal(attackModel.state, CARD_STATES.BEATEN);
+  assert.equal(defenseModel.state, CARD_STATES.PLAYED);
+  assert.equal(playableModel.canDrag(), true);
+  assert.equal(typeof playableModel.onHoverStart, 'function');
+  assert.equal(playableModel.onPlayCommit().lifecycle, 'play');
+});
+
+test('table model centralizes z-order and beaten stack drag groups', () => {
+  const beatenAttack = card('beaten-9h', '9', 'hearts');
+  const defense = card('defense-10h', '10', 'hearts');
+  const liveAttack = card('live-9c', '9', 'clubs');
+  const battle = [
+    {
+      attack: beatenAttack,
+      defense,
+      defenses: [defense],
+      attackOrder: 1,
+      defenseOrder: 2,
+      defenseOrders: [2],
+      requiredDefenseCount: 1
+    },
+    {
+      attack: liveAttack,
+      defense: null,
+      defenses: [],
+      attackOrder: 3
+    }
+  ];
+
+  const beatenZ = getSlotZModel(battle[0], 0);
+  const liveZ = getSlotZModel(battle[1], 1);
+  const group = getDragGroup(battle[0]);
+
+  assert.equal(beatenZ.defenseZIndexes[0] > beatenZ.attackZIndex, true);
+  assert.equal(liveZ.attackZIndex > beatenZ.defenseZIndexes[0], true);
+  assert.deepEqual(group.cardIds, [beatenAttack.id, defense.id]);
+});
+
+test('table group movement preserves defense offset inside the stack', () => {
+  const attack = card('attack-9h', '9', 'hearts');
+  const defense = card('defense-10h', '10', 'hearts');
+  const customState = state({
+    battle: [{
+      attack,
+      defense,
+      defenses: [defense],
+      attackPosition: { x: 0.4, y: 0.4 },
+      defensePosition: { x: 0.46, y: 0.52 },
+      defensePositions: [{ x: 0.46, y: 0.52 }],
+      requiredDefenseCount: 1
+    }]
+  });
+
+  const moved = moveTableGroup(customState, `slot:${attack.id}`, { x: 0.6, y: 0.5 });
+
+  assert.equal(moved.groupId, `slot:${attack.id}`);
+  assert.deepEqual(customState.battle[0].attackPosition, { x: 0.6, y: 0.5 });
+  assert.equal(Math.abs(customState.battle[0].defensePosition.x - 0.66) < 1e-9, true);
+  assert.equal(Math.abs(customState.battle[0].defensePosition.y - 0.62) < 1e-9, true);
+});
+
+test('transitions expose explicit lifecycle order without event text parsing', () => {
+  const cardTransitions = createCardActionTransitions('card-1', 'defense', { actor: 'player' });
+  const clearTransitions = createBattleClearTransition('discard', null, ['card-1']);
+  const transitions = normalizeTransitions([cardTransitions, clearTransitions]);
+
+  assert.deepEqual(transitions.map((item) => item.type), [
+    TRANSITION_TYPES.HOVER_END,
+    TRANSITION_TYPES.CARD_BEAT,
+    TRANSITION_TYPES.CARD_DISCARD,
+    TRANSITION_TYPES.BATTLE_CLEAR
+  ]);
+  assert.equal(transitions.some((item) => Object.hasOwn(item, 'lastEvent')), false);
 });
 
 test('limits throw-ins to five cards after the first attack', () => {
@@ -339,7 +477,227 @@ test('randomly assigns at most one effect per card and can leave cards plain', (
 
   assert.equal(cards[0].effect, EFFECT_IDS.DOUBLE_COVER);
   assert.equal(cards[1].effect, undefined);
-  assert.deepEqual(EFFECT_DEFINITIONS.map((effect) => effect.id), [EFFECT_IDS.DOUBLE_COVER]);
+  assert.deepEqual(EFFECT_DEFINITIONS.map((effect) => effect.id), Object.values(EFFECT_IDS));
+});
+
+test('rank-lock effect blocks same-rank throw-ins', () => {
+  const lock = { ...card('lock-7h', '7', 'hearts'), effect: EFFECT_IDS.RANK_LOCK };
+  const sameRank = card('same-7c', '7', 'clubs');
+  const game = gameFrom(state({
+    hands: { player: [lock, sameRank], ai: Array.from({ length: 6 }, (_, index) => card(`ai-${index}`, 'A', 'clubs')) },
+    battle: []
+  }));
+
+  const attack = game.playAttack(lock.id);
+  assert.equal(attack.ok, true);
+  assert.equal(attack.state.legalTargets[sameRank.id].includes('table'), false);
+  assert.equal(game.throwIn(sameRank.id).ok, false);
+});
+
+test('rank-up effect promotes the played card without changing its id', () => {
+  const flip = { ...card('flip-6h', '6', 'hearts'), effect: EFFECT_IDS.RANK_UP };
+  const game = gameFrom(state({
+    hands: { player: [flip], ai: [card('ai-a', 'A', 'clubs')] },
+    battle: []
+  }));
+
+  const result = game.playAttack(flip.id);
+  assert.equal(result.ok, true);
+  assert.equal(result.state.battle[0].attack.id, flip.id);
+  assert.equal(result.state.battle[0].attack.value > 6, true);
+  assert.equal(result.state.battle[0].attack.value <= 14, true);
+  assert.equal(result.state.battle[0].attack.nominal, result.state.battle[0].attack.rank);
+});
+
+test('blind-defense effect blocks transfer', () => {
+  const blind = { ...card('blind-7h', '7', 'hearts'), effect: EFFECT_IDS.BLIND_DEFENSE };
+  const transfer = card('transfer-7c', '7', 'clubs');
+  const game = gameFrom(state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [transfer], ai: [blind] },
+    battle: [],
+    battleNumber: 2,
+    defenderStartHandCount: 1
+  }));
+
+  const attack = game.advanceOpponent();
+  assert.equal(attack.ok, true);
+  assert.equal(attack.state.battle[0].transferBlocked, true);
+  assert.equal(attack.state.legalTargets[transfer.id].includes('table'), false);
+  assert.equal(game.playCardToTarget(transfer.id, 'table').ok, false);
+});
+
+test('forbid-suit effect blocks the selected defense suit and shows it in tooltip data', () => {
+  const forbid = { ...card('forbid-6c', '6', 'clubs'), effect: { id: EFFECT_IDS.FORBID_SUIT, suit: 'hearts' } };
+  const attack = card('attack-7h', '7', 'hearts');
+  const heartDefense = card('defense-8h', '8', 'hearts');
+  const customState = state({
+    forbiddenDefenseSuits: ['hearts'],
+    battle: [{ attack, defense: null }]
+  });
+
+  const model = createCardModel(forbid, customState, 'player');
+  assert.equal(model.effectDescription.includes('черв'), true);
+  assert.equal(canCardBeatAttack(heartDefense, attack, customState), false);
+});
+
+test('forbid-suit assignment excludes the card suit', () => {
+  const effect = createEffect(EFFECT_IDS.FORBID_SUIT, () => 0, card('forbid-6c', '6', 'clubs'));
+
+  assert.equal(effect.id, EFFECT_IDS.FORBID_SUIT);
+  assert.notEqual(effect.suit, 'clubs');
+  assert.equal(['diamonds', 'hearts', 'spades'].includes(effect.suit), true);
+});
+
+test('nullifier defense cancels the beaten attack effect and active state', () => {
+  const attack = { ...card('attack-6h', '6', 'hearts'), effect: EFFECT_IDS.DOUBLE_COVER };
+  const nullifier = { ...card('nullifier-7h', '7', 'hearts'), effect: EFFECT_IDS.NULLIFY_EFFECT };
+  const game = gameFrom(state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [nullifier], ai: [] },
+    battle: [{ attack, defense: null, defenses: [], requiredDefenseCount: 2, source: 'ai' }],
+    defenderStartHandCount: 1
+  }));
+
+  const result = game.playDefense(attack.id, nullifier.id);
+  assert.equal(result.ok, true);
+  assert.equal(result.state.battle[0].attack.effectId, null);
+  assert.equal(result.state.battle[0].requiredDefenseCount, 1);
+  assert.equal(result.state.battle[0].isDefended, true);
+  assert.equal(result.state.eventLog[0].kind, 'effect');
+});
+
+test('nullifier attack cancels the covering card effect before it applies', () => {
+  const attack = { ...card('attack-6h', '6', 'hearts'), effect: EFFECT_IDS.NULLIFY_EFFECT };
+  const bounce = { ...card('bounce-7h', '7', 'hearts'), effect: EFFECT_IDS.BOUNCE };
+  const game = gameFrom(state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [bounce], ai: [] },
+    battle: [{ attack, defense: null, defenses: [], source: 'ai' }],
+    defenderStartHandCount: 1
+  }));
+
+  const result = game.playDefense(attack.id, bounce.id);
+  assert.equal(result.ok, true);
+  assert.equal(result.state.battle[0].defense.effectId, null);
+  assert.equal(result.state.battle[0].returnAttackTo, null);
+  assert.equal(result.state.eventLog[0].kind, 'effect');
+});
+
+test('bounce returns the beaten attack to its source when the defender takes', () => {
+  const firstAttack = card('attack-6h', '6', 'hearts');
+  const secondAttack = card('attack-9c', '9', 'clubs');
+  const bounceDefense = { ...card('bounce-7h', '7', 'hearts'), effect: EFFECT_IDS.BOUNCE };
+  const game = gameFrom(state({
+    attacker: 'ai',
+    defender: 'player',
+    hands: { player: [bounceDefense], ai: [] },
+    battle: [
+      { attack: firstAttack, defense: null, defenses: [], source: 'ai' },
+      { attack: secondAttack, defense: null, defenses: [], source: 'ai' }
+    ],
+    defenderStartHandCount: 2
+  }));
+
+  assert.equal(game.playDefense(firstAttack.id, bounceDefense.id).ok, true);
+  const result = game.takeCards();
+  assert.equal(result.ok, true);
+  assert.equal(result.state.aiCardCount, 1);
+  assert.equal(result.state.playerCardCount, 2);
+  assert.equal(game.state.hands.ai[0].id, firstAttack.id);
+});
+
+test('bounce returns the beaten attack to its source when the battle finishes', () => {
+  const attack = card('attack-6h', '6', 'hearts');
+  const bounceDefense = { ...card('bounce-7h', '7', 'hearts'), effect: EFFECT_IDS.BOUNCE };
+  const game = gameFrom(state({
+    attacker: 'player',
+    defender: 'ai',
+    hands: {
+      player: Array.from({ length: 6 }, (_, index) => card(`player-${index}`, 'A', 'clubs')),
+      ai: []
+    },
+    battle: [{
+      attack,
+      defense: bounceDefense,
+      defenses: [bounceDefense],
+      source: 'ai',
+      returnAttackTo: 'ai'
+    }],
+    defenderStartHandCount: 1
+  }));
+
+  const result = game.finishBattle();
+  assert.equal(result.ok, true);
+  assert.equal(game.state.hands.ai.some((item) => item.id === attack.id), true);
+  assert.equal(game.state.discardPile.some((item) => item.id === attack.id), false);
+  assert.equal(game.state.discardPile.some((item) => item.id === bounceDefense.id), true);
+});
+
+test('rust makes the taker draw an extra card for an unbeaten rusty attack', () => {
+  const rustyAttack = { ...card('rust-6h', '6', 'hearts'), effect: EFFECT_IDS.RUST };
+  const extraDraw = card('draw-2c', '2', 'clubs');
+  const game = gameFrom(state({
+    attacker: 'ai',
+    defender: 'player',
+    deck: [extraDraw],
+    hands: { player: [], ai: [] },
+    battle: [{ attack: rustyAttack, defense: null, defenses: [], rustyAttack: true, source: 'ai' }],
+    defenderStartHandCount: 1
+  }));
+
+  const result = game.takeCards();
+  assert.equal(result.ok, true);
+  assert.equal(result.state.playerCardCount, 2);
+  assert.equal(result.state.deckCount, 0);
+});
+
+test('return-from-discard sends matching finished cards back to the deck', () => {
+  const returning = { ...card('return-6h', '6', 'hearts'), effect: EFFECT_IDS.RETURN_FROM_DISCARD };
+  const defense = card('defense-7h', '7', 'hearts');
+  const game = gameFrom(state({
+    hands: {
+      player: Array.from({ length: 6 }, (_, index) => card(`player-${index}`, 'A', 'clubs')),
+      ai: Array.from({ length: 6 }, (_, index) => card(`ai-${index}`, 'K', 'clubs'))
+    },
+    battle: [{ attack: returning, defense, defenses: [defense] }]
+  }));
+
+  const result = game.finishBattle();
+  assert.equal(result.ok, true);
+  assert.equal(result.state.discardCount, 1);
+  assert.equal(result.state.deckCount, 1);
+});
+
+test('black mark reveals marked AI hand cards in public state', () => {
+  const marked = { ...card('marked-9s', '9', 'spades'), effect: EFFECT_IDS.BLACK_MARK };
+  const hidden = card('hidden-2c', '2', 'clubs');
+  const game = gameFrom(state({
+    hands: { player: [], ai: [marked, hidden] }
+  }));
+
+  const publicState = game.getPublicState();
+  assert.equal(publicState.aiHandPreview[0].id, marked.id);
+  assert.equal(publicState.aiHandPreview[1], null);
+});
+
+test('hand-swap exchanges all remaining hand cards when played', () => {
+  const swap = { ...card('swap-6h', '6', 'hearts'), effect: EFFECT_IDS.HAND_SWAP };
+  const playerLeft = card('player-left-2c', '2', 'clubs');
+  const aiFirst = card('ai-first-9c', '9', 'clubs');
+  const aiSecond = card('ai-second-10c', '10', 'clubs');
+  const game = gameFrom(state({
+    hands: { player: [swap, playerLeft], ai: [aiFirst, aiSecond] },
+    battle: []
+  }));
+
+  const result = game.playAttack(swap.id);
+  assert.equal(result.ok, true);
+  assert.deepEqual(game.state.hands.player.map((item) => item.id), [aiFirst.id, aiSecond.id]);
+  assert.deepEqual(game.state.hands.ai.map((item) => item.id), [playerLeft.id]);
 });
 
 test('double-cover attack requires two defense cards', () => {

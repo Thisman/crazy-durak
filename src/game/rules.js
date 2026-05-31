@@ -1,3 +1,5 @@
+import { EFFECT_IDS, hasEffect } from './effects.js';
+
 export const MAX_THROW_INS = 5;
 export const HAND_TARGET = 6;
 
@@ -62,6 +64,10 @@ export function battleCards(battle) {
   return battle.flatMap((slot) => [slot.attack, ...slotDefenses(slot)]);
 }
 
+function hasTransferBlock(state) {
+  return state.battle.some((slot) => slot.transferBlocked || hasEffect(slot.attack, EFFECT_IDS.BLIND_DEFENSE));
+}
+
 export function canStartAttack(state, actor) {
   return state.phase === 'playing' && state.attacker === actor && state.battle.length === 0;
 }
@@ -70,6 +76,7 @@ export function canThrowIn(state, actor, card) {
   if (state.phase !== 'playing') return false;
   if (state.attacker !== actor) return false;
   if (state.battle.length === 0) return false;
+  if ((state.blockedThrowRanks ?? []).includes(card.rank)) return false;
   if (!tableRanks(state.battle).has(card.rank)) return false;
   if (state.battle.length - 1 >= MAX_THROW_INS) return false;
   if (state.battle.length >= state.defenderStartHandCount) return false;
@@ -86,6 +93,7 @@ export function canTransfer(state, actor, card) {
   if (state.battleNumber <= 1) return false;
   if (state.battle.length === 0) return false;
   if (state.battle.some((slot) => slotDefenseCount(slot) > 0)) return false;
+  if (hasTransferBlock(state)) return false;
 
   const rank = state.battle[0].attack.rank;
   if (card.rank !== rank) return false;
@@ -113,7 +121,11 @@ function getLegacyDropTargets(state, actor, card) {
 
   if (state.defender === actor) {
     for (const slot of state.battle) {
-      if (!isSlotDefended(slot) && canBeat(slot.attack, card, state.trumpSuit)) {
+      if (
+        !isSlotDefended(slot)
+        && !(state.forbiddenDefenseSuits ?? []).includes(card.suit)
+        && canBeat(slot.attack, card, state.trumpSuit)
+      ) {
         targets.push(`attack-card:${slot.attack.id}`);
       }
     }

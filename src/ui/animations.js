@@ -89,6 +89,7 @@ export class GameAnimations {
 
     this.elements.battleRow.classList.add(`battle-animate-${kind}`);
     if (actor) this.elements.battleRow.classList.add(`battle-animate-${actor}`);
+    this.spawnBattleClearParticles(cards, kind);
 
     await waitForAnyAnimation(cards, DEFAULT_DURATION);
     cards.forEach((card) => card.classList.add('is-battle-cleared'));
@@ -98,6 +99,38 @@ export class GameAnimations {
       'battle-animate-player',
       'battle-animate-ai'
     );
+  }
+
+  spawnBattleClearParticles(cards, kind) {
+    const table = this.elements.tableDropZone;
+    if (!table) return;
+
+    const tableRect = table.getBoundingClientRect();
+    const count = kind === 'discard' ? 7 : 6;
+
+    for (const card of cards) {
+      const cardRect = card.getBoundingClientRect();
+      const burst = document.createElement('div');
+      const centerX = cardRect.left + cardRect.width / 2 - tableRect.left;
+      const centerY = cardRect.top + cardRect.height / 2 - tableRect.top;
+
+      burst.className = `clear-particles clear-particles-${kind}`;
+      burst.style.left = `${centerX}px`;
+      burst.style.top = `${centerY}px`;
+
+      for (let index = 0; index < count; index += 1) {
+        const particle = document.createElement('span');
+        const angle = (index / count) * Math.PI * 2;
+        const distance = 18 + (index % 3) * 9;
+        particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
+        particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
+        particle.style.animationDelay = `${index * 6}ms`;
+        burst.append(particle);
+      }
+
+      table.append(burst);
+      window.setTimeout(() => burst.remove(), 340);
+    }
   }
 
   async playTableCardEnter({ cardIds } = {}) {
