@@ -1,10 +1,12 @@
 import {
+  EFFECT_IDS,
   applyCardEffect,
   applyEffectAnimationModifiers,
   applyEffectModelModifiers,
   getCardEffect,
   getCardEffectDescription,
-  getCardEffectId
+  getCardEffectId,
+  hasEffect
 } from './effects.js';
 import {
   battleCards,
@@ -49,6 +51,11 @@ function defaultAnimationProfile() {
 export function canCardBeatAttack(defenseCard, attackCard, state) {
   if (!defenseCard || !attackCard) return false;
   if ((state.forbiddenDefenseSuits ?? []).includes(defenseCard.suit)) return false;
+  if (
+    hasEffect(attackCard, EFFECT_IDS.SPEAR)
+    && defenseCard.suit === state.trumpSuit
+    && attackCard.suit !== state.trumpSuit
+  ) return false;
   return canBeat(attackCard, defenseCard, state.trumpSuit);
 }
 

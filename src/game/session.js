@@ -1,6 +1,6 @@
 import { createDeck, shuffle, sortCards } from './cards.js';
 import { assignRandomEffects, EFFECT_IDS, getCardEffectId, getCardEffectPayload } from './effects.js';
-import { HAND_TARGET, opponentOf } from './rules.js';
+import { HAND_TARGET, opponentOf, slotDefenses } from './rules.js';
 
 export function cloneCard(card) {
   if (!card) return null;
@@ -63,6 +63,7 @@ export function createEmptyState() {
     nextPlayOrder: 1,
     blockedThrowRanks: [],
     forbiddenDefenseSuits: [],
+    forcedAttackSuit: null,
     effectPulseIds: [],
     lastEvent: 'Нажмите «Начать игру».',
     eventLog: []
@@ -96,6 +97,7 @@ export function cloneState(state) {
     discardPile: (state.discardPile ?? []).map(cloneCard),
     blockedThrowRanks: [...(state.blockedThrowRanks ?? [])],
     forbiddenDefenseSuits: [...(state.forbiddenDefenseSuits ?? [])],
+    forcedAttackSuit: state.forcedAttackSuit ?? null,
     effectPulseIds: [...(state.effectPulseIds ?? [])],
     eventLog: [...(state.eventLog ?? [])]
   };
@@ -131,6 +133,7 @@ function addUnique(items, item) {
 export function rebuildBattleEffectState(state) {
   state.blockedThrowRanks = [];
   state.forbiddenDefenseSuits = [];
+  state.forcedAttackSuit = null;
 
   for (const slot of state.battle) {
     const attackEffectId = getCardEffectId(slot.attack);
@@ -145,6 +148,12 @@ export function rebuildBattleEffectState(state) {
 
     if (attackEffectId === EFFECT_IDS.FORBID_SUIT) {
       addUnique(state.forbiddenDefenseSuits, getCardEffectPayload(slot.attack).suit);
+    }
+
+    for (const defense of slotDefenses(slot)) {
+      if (getCardEffectId(defense) === EFFECT_IDS.BARRIER) {
+        state.forcedAttackSuit = defense.suit;
+      }
     }
   }
 }

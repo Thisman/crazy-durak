@@ -655,22 +655,6 @@ test('rust makes the taker draw an extra card for an unbeaten rusty attack', () 
   assert.equal(result.state.deckCount, 0);
 });
 
-test('return-from-discard sends matching finished cards back to the deck', () => {
-  const returning = { ...card('return-6h', '6', 'hearts'), effect: EFFECT_IDS.RETURN_FROM_DISCARD };
-  const defense = card('defense-7h', '7', 'hearts');
-  const game = gameFrom(state({
-    hands: {
-      player: Array.from({ length: 6 }, (_, index) => card(`player-${index}`, 'A', 'clubs')),
-      ai: Array.from({ length: 6 }, (_, index) => card(`ai-${index}`, 'K', 'clubs'))
-    },
-    battle: [{ attack: returning, defense, defenses: [defense] }]
-  }));
-
-  const result = game.finishBattle();
-  assert.equal(result.ok, true);
-  assert.equal(result.state.discardCount, 1);
-  assert.equal(result.state.deckCount, 1);
-});
 
 test('black mark reveals marked AI hand cards in public state', () => {
   const marked = { ...card('marked-9s', '9', 'spades'), effect: EFFECT_IDS.BLACK_MARK };

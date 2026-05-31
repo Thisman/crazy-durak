@@ -37,6 +37,7 @@ export function startNextBattle(state, attacker) {
   state.defenderStartHandCount = state.hands[state.defender].length;
   state.blockedThrowRanks = [];
   state.forbiddenDefenseSuits = [];
+  state.forcedAttackSuit = null;
   state.effectPulseIds = [];
 }
 

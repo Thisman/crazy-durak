@@ -80,6 +80,7 @@ export function canThrowIn(state, actor, card) {
   if (!tableRanks(state.battle).has(card.rank)) return false;
   if (state.battle.length - 1 >= MAX_THROW_INS) return false;
   if (state.battle.length >= state.defenderStartHandCount) return false;
+  if (state.forcedAttackSuit && card.suit !== state.forcedAttackSuit) return false;
   return true;
 }
 
@@ -102,6 +103,7 @@ export function canTransfer(state, actor, card) {
   const newDefender = state.attacker;
   if (state.hands[newDefender].length < state.battle.length + 1) return false;
   if (state.battle.length - 1 >= MAX_THROW_INS) return false;
+  if (state.forcedAttackSuit && card.suit !== state.forcedAttackSuit) return false;
 
   return true;
 }

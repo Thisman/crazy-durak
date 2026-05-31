@@ -461,6 +461,13 @@ export class DurakGame {
       this.enqueueTransitions(createEffectPulseTransition(this.state.effectPulseIds));
     }
 
+    if (outcome?.spawnedCard) {
+      const spawned = outcome.spawnedCard;
+      const spawnedSlot = createBattleSlot(this.state, spawned, aiTablePosition(this.state), actor);
+      this.state.battle.push(spawnedSlot);
+      this.enqueueTransitions(createCardActionTransitions(spawned.id, 'attack', { actor }));
+    }
+
     if (outcome?.applied && outcome.message) {
       recordEvent(this.state, `эффект ${card.rank}${card.symbol}: ${outcome.message}.`, { kind: 'effect' });
     }
@@ -644,8 +651,6 @@ export class DurakGame {
   resolveFinish() {
     const oldAttacker = this.state.attacker;
     const oldDefender = this.state.defender;
-    const finishedCards = [];
-    const returnedCards = [];
     const discardedCards = [];
     let bouncedCount = 0;
     this.enqueueTransitions(createBattleClearTransition('discard', null, battleCardIds(this.state.battle)));
@@ -655,29 +660,17 @@ export class DurakGame {
         this.state.hands[slot.returnAttackTo].push(slot.attack);
         bouncedCount += 1;
       } else {
-        finishedCards.push(slot.attack);
+        discardedCards.push(slot.attack);
       }
 
-      finishedCards.push(...slotDefenses(slot));
-    }
-
-    for (const card of finishedCards) {
-      if (hasEffect(card, EFFECT_IDS.RETURN_FROM_DISCARD)) {
-        returnedCards.push(card);
-      } else {
-        discardedCards.push(card);
-      }
+      discardedCards.push(...slotDefenses(slot));
     }
 
     this.state.discardPile.push(...discardedCards);
-    this.state.deck.push(...returnedCards);
     this.state.discardCount = this.state.discardPile.length;
     this.state.battle = [];
     if (bouncedCount > 0) {
       recordEvent(this.state, `Отскок вернул ${bouncedCount} атакующих карт сопернику.`, { kind: 'effect' });
-    }
-    if (returnedCards.length > 0) {
-      recordEvent(this.state, `Возврат из бито отправил ${returnedCards.length} карт в низ колоды.`, { kind: 'effect' });
     }
     recordEvent(this.state, 'Бой ушел в бито.');
     this.drawAfterBattle(oldAttacker, oldDefender);

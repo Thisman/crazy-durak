@@ -37,6 +37,13 @@ export class DragController {
     const targetSet = new Set(targets);
     const dropTargets = kind === 'hand' ? this.collectDropTargets(targetSet) : [];
     const { ghost, sourceRect, hiddenSources } = this.createGhost(source, kind);
+
+    const offsetX = kind === 'table' ? event.clientX - sourceRect.left : sourceRect.width / 2;
+    const offsetY = kind === 'table' ? event.clientY - sourceRect.top : sourceRect.height / 2;
+    const initScale = DRAG_SCALE;
+    const initRotation = kind === 'table' ? '0deg' : '-1deg';
+    ghost.style.transform = `translate3d(${event.clientX - offsetX}px, ${event.clientY - offsetY}px, 0) scale(${initScale}) rotate(${initRotation})`;
+
     hiddenSources.forEach((item) => item.classList.add('is-drag-source'));
     document.body.append(ghost);
 
@@ -49,8 +56,8 @@ export class DragController {
       sourceRect,
       hiddenSources,
       ghost,
-      offsetX: sourceRect.width / 2,
-      offsetY: sourceRect.height / 2,
+      offsetX,
+      offsetY,
       targets,
       targetSet,
       dropTargets,
@@ -62,7 +69,6 @@ export class DragController {
     this.onDragStart({ cardId, source, kind, groupId: this.active.groupId });
     document.body.classList.add('is-dragging-card');
     this.markEligibleTargets(dropTargets);
-    this.moveGhost(event.clientX, event.clientY);
 
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
@@ -75,9 +81,12 @@ export class DragController {
       const sourceRect = slot.getBoundingClientRect();
       const ghost = slot.cloneNode(true);
       ghost.classList.add('drag-ghost', 'table-drag-ghost');
+      ghost.style.left = '0';
+      ghost.style.top = '0';
       ghost.style.width = `${sourceRect.width}px`;
       ghost.style.height = `${sourceRect.height}px`;
       ghost.querySelectorAll('[data-drop-target]').forEach((item) => item.removeAttribute('data-drop-target'));
+      ghost.querySelectorAll('.effect-trigger').forEach((item) => item.classList.remove('effect-trigger'));
       return { ghost, sourceRect, hiddenSources: [slot] };
     }
 
@@ -86,6 +95,7 @@ export class DragController {
     ghost.classList.add('drag-ghost');
     ghost.style.width = `${sourceRect.width}px`;
     ghost.style.height = `${sourceRect.height}px`;
+    ghost.classList.remove('effect-trigger');
     return { ghost, sourceRect, hiddenSources: [source] };
   }
 
@@ -121,7 +131,7 @@ export class DragController {
     const position = this.getTablePosition(event.clientX, event.clientY);
     const targetId = active.currentTarget?.dataset.dropTarget ?? null;
     const drop = targetId ? { id: targetId, position } : null;
-    const tableMove = active.kind === 'table' && this.isTablePoint(event.clientX, event.clientY)
+    const tableMove = active.kind === 'table' && this.isSlotPositionValid(event.clientX, event.clientY, active.sourceRect)
       ? { groupId: active.groupId, position }
       : null;
 
@@ -159,7 +169,7 @@ export class DragController {
 
   moveGhost(clientX, clientY) {
     const { ghost, offsetX, offsetY, kind } = this.active;
-    const scale = kind === 'table' ? 1 : DRAG_SCALE;
+    const scale = DRAG_SCALE;
     const rotation = kind === 'table' ? '0deg' : '-1deg';
     ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${scale}) rotate(${rotation})`;
   }
@@ -241,6 +251,16 @@ export class DragController {
       && clientY <= rect.bottom;
   }
 
+  isSlotPositionValid(clientX, clientY, sourceRect) {
+    const layerRect = this.getTableLayer().getBoundingClientRect();
+    const halfW = sourceRect.width / 2;
+    const halfH = sourceRect.height / 2;
+    return clientX - halfW >= layerRect.left
+      && clientX + halfW <= layerRect.right
+      && clientY - halfH >= layerRect.top
+      && clientY + halfH <= layerRect.bottom;
+  }
+
   cleanupTargetClasses() {
     document.querySelectorAll('.drop-eligible, .drop-active').forEach((element) => {
       element.classList.remove('drop-eligible', 'drop-active');
@@ -255,7 +275,7 @@ export class DragController {
   animateBack(active) {
     const { ghost, source, kind } = active;
     const startTransform = ghost.style.transform;
-    const targetRect = (kind === 'table' ? source.closest('.battle-slot') : source).getBoundingClientRect();
+    const targetRect = kind === 'table' ? active.sourceRect : source.getBoundingClientRect();
     const endTransform = `translate3d(${targetRect.left}px, ${targetRect.top}px, 0) scale(1) rotate(0deg)`;
 
     this.detachWindowEvents();
@@ -282,7 +302,6 @@ export class DragController {
     });
 
     animation.finished.catch(() => {}).then(() => {
-      animation.cancel();
       if (kind === 'hand') {
         source.classList.add('card-return-impact');
         const cleanupImpact = () => source.classList.remove('card-return-impact');

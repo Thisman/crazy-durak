@@ -180,6 +180,22 @@ button:disabled {
   transform: none !important;
 }
 
+.secondary-action:disabled {
+  opacity: 0.3;
+  border-color: var(--line-dim);
+  box-shadow: none;
+  color: var(--muted);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(255, 255, 255, 0.04) 4px,
+      rgba(255, 255, 255, 0.04) 8px
+    ),
+    var(--surface);
+}
+
 .game-screen {
   --board-y-gap: clamp(24px, 4vh, 36px);
   position: relative;
@@ -603,7 +619,6 @@ button:disabled {
   visibility: hidden;
   pointer-events: none;
   transition: none;
-  transform: none !important;
 }
 
 .table-card {
@@ -923,7 +938,6 @@ body.is-dragging-card .effect-tooltip {
   cursor: wait;
 }
 
-.game-screen.is-locked button,
 .game-screen.is-locked .hand-card,
 .game-screen.is-locked .play-table,
 .game-screen.is-locked .battle-slot {
@@ -1015,6 +1029,8 @@ body.is-dragging-card .effect-tooltip {
 .table-drag-ghost {
   background: transparent;
   box-shadow: none;
+  contain: layout style;
+  overflow: visible;
 }
 
 .table-drag-ghost .table-card {

@@ -8,7 +8,9 @@ export const EFFECT_IDS = {
   BLIND_DEFENSE: 'blind_defense',
   BOUNCE: 'bounce',
   FORBID_SUIT: 'forbid_suit',
-  RETURN_FROM_DISCARD: 'return_from_discard',
+  SPEAR: 'spear',
+  BARRIER: 'barrier',
+  CLONE: 'clone',
   BLACK_MARK: 'black_mark',
   HAND_SWAP: 'hand_swap',
   NULLIFY_EFFECT: 'nullify_effect'
@@ -58,10 +60,22 @@ export const EFFECT_DEFINITIONS = [
     icon: 'fa-solid fa-suitcase'
   },
   {
-    id: EFFECT_IDS.RETURN_FROM_DISCARD,
-    title: 'Возврат из бито',
-    description: 'Когда карта должна уйти в бито, она возвращается в низ колоды.',
-    icon: 'fa-solid fa-recycle'
+    id: EFFECT_IDS.SPEAR,
+    title: 'Копьё',
+    description: 'Эту атаку нельзя побить козырем — только старшей картой той же масти.',
+    icon: 'fa-solid fa-crosshairs'
+  },
+  {
+    id: EFFECT_IDS.BARRIER,
+    title: 'Барьер',
+    description: 'Когда этой картой покрывают атаку, атакующий может подкидывать только карты этой масти до конца боя.',
+    icon: 'fa-solid fa-lock'
+  },
+  {
+    id: EFFECT_IDS.CLONE,
+    title: 'Двойник',
+    description: 'При розыгрыше в атаку случайная карта из колоды тоже автоматически атакует.',
+    icon: 'fa-solid fa-clone'
   },
   {
     id: EFFECT_IDS.BLACK_MARK,
@@ -245,8 +259,31 @@ function applyForbidSuit(cardModel, zones, context) {
   };
 }
 
-function applyReturnFromDiscard(cardModel) {
-  return { applied: true, message: 'карта вернется из бито в колоду', pulseIds: [cardModel.id] };
+function applySpear(cardModel, zones, context) {
+  if (!context.isAttackLike) return null;
+  return { applied: true, message: 'эту атаку нельзя побить козырем', pulseIds: [cardModel.id] };
+}
+
+function applyBarrier(cardModel, zones, context) {
+  if (context.role !== 'defense') return null;
+  context.state.forcedAttackSuit = cardModel.suit;
+  return {
+    applied: true,
+    message: `атакующий может подкидывать только масть ${suitLabel(cardModel.suit)}`,
+    pulseIds: [cardModel.id]
+  };
+}
+
+function applyClone(cardModel, zones, context) {
+  if (!context.isAttackLike) return null;
+  if (context.state.deck.length === 0) return { applied: false };
+  const spawned = context.state.deck.shift();
+  return {
+    applied: true,
+    message: `двойник вытащил ${spawned.rank}${spawned.symbol} из колоды`,
+    pulseIds: [cardModel.id],
+    spawnedCard: spawned
+  };
 }
 
 function applyBlackMark(cardModel) {
@@ -268,7 +305,9 @@ const EFFECT_APPLIERS = {
   [EFFECT_IDS.BLIND_DEFENSE]: applyBlindDefense,
   [EFFECT_IDS.BOUNCE]: applyBounce,
   [EFFECT_IDS.FORBID_SUIT]: applyForbidSuit,
-  [EFFECT_IDS.RETURN_FROM_DISCARD]: applyReturnFromDiscard,
+  [EFFECT_IDS.SPEAR]: applySpear,
+  [EFFECT_IDS.BARRIER]: applyBarrier,
+  [EFFECT_IDS.CLONE]: applyClone,
   [EFFECT_IDS.BLACK_MARK]: applyBlackMark,
   [EFFECT_IDS.HAND_SWAP]: applyHandSwap
 };
