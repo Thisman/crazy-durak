@@ -132,7 +132,13 @@ async function renderResult(result, options = {}) {
   const previousState = currentState;
   const clearAnimation = getBattleClearAnimation(previousState, result.state);
   if (clearAnimation) {
-    await renderer.animateBattleClear(clearAnimation.kind, clearAnimation.actor);
+    const countAnimation = clearAnimation.kind === 'discard'
+      ? renderer.animateDiscardCount(previousState.discardCount, result.state.discardCount)
+      : Promise.resolve();
+    await Promise.all([
+      renderer.animateBattleClear(clearAnimation.kind, clearAnimation.actor),
+      countAnimation
+    ]);
   }
 
   const newEntries = getNewBattleEntries(previousState, result.state);

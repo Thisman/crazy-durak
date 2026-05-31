@@ -91,6 +91,7 @@ export class GameAnimations {
     if (actor) this.elements.battleRow.classList.add(`battle-animate-${actor}`);
 
     await waitForAnyAnimation(cards, DEFAULT_DURATION);
+    cards.forEach((card) => card.classList.add('is-battle-cleared'));
 
     this.elements.battleRow.classList.remove(
       `battle-animate-${kind}`,

@@ -327,10 +327,20 @@ button:disabled {
 }
 
 .counter-group strong {
+  display: inline-block;
   color: var(--ink);
   font-size: 28px;
   line-height: 1;
   text-shadow: 3px 3px 0 var(--accent-soft);
+  transform-origin: center;
+}
+
+.counter-group strong.is-counting {
+  color: var(--accent);
+}
+
+.counter-group strong.count-step {
+  animation: counterStep 120ms steps(4, end) both;
 }
 
 .pile-label {
@@ -541,13 +551,13 @@ button:disabled {
   flex: 0 0 var(--card-w);
   cursor: grab;
   touch-action: none;
-  transform-origin: center bottom;
+  transform-origin: center center;
   transition: transform 80ms steps(2, end), box-shadow 80ms steps(2, end), opacity 80ms steps(2, end);
 }
 
 .hand-card:not(:disabled):hover {
   z-index: 6;
-  transform: translateY(-16px) scale(1.08);
+  transform: scale(1.1);
   box-shadow: 7px 7px 0 var(--accent);
 }
 
@@ -566,7 +576,7 @@ button:disabled {
 }
 
 .is-drag-source {
-  opacity: 0 !important;
+  visibility: hidden;
   pointer-events: none;
   transition: none;
   transform: none !important;
@@ -662,6 +672,7 @@ button:disabled {
   color: var(--ink);
   font-size: 11px;
   box-shadow: 3px 3px 0 var(--line-dim);
+  pointer-events: none;
 }
 
 .active-effects {
@@ -702,10 +713,11 @@ button:disabled {
   color: var(--accent);
   font-size: 10px;
   box-shadow: 3px 3px 0 var(--line-dim);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .effect-tooltip {
+  --effect-tooltip-gap: 40px;
   position: fixed;
   z-index: 90;
   display: grid;
@@ -718,8 +730,17 @@ button:disabled {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 5px 5px 0 var(--line-dim);
-  pointer-events: none;
+  pointer-events: auto;
   transform: translate(-50%, -100%);
+}
+
+.effect-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--effect-tooltip-gap) * -1);
+  height: var(--effect-tooltip-gap);
 }
 
 body.is-dragging-card .effect-tooltip {
@@ -797,7 +818,7 @@ body.is-dragging-card .effect-tooltip {
   display: flex;
   justify-content: center;
   align-items: end;
-  gap: 10px;
+  gap: 16px;
   min-height: 188px;
   padding: 26px 16px 12px;
   border-top: 4px solid var(--line-dim);
@@ -887,28 +908,26 @@ body.is-dragging-card .effect-tooltip {
   animation: aiThinkingLoader 720ms steps(3, end) infinite;
 }
 
-.battle-row.battle-animate-discard .attack-card {
-  animation: battleAttackToDiscard 600ms cubic-bezier(.2, .88, .2, 1) both;
+.battle-row.battle-animate-discard .card {
+  --collapse-glow: var(--accent);
 }
 
-.battle-row.battle-animate-discard .defense-card {
-  animation: battleDefenseToDiscard 600ms cubic-bezier(.2, .88, .2, 1) both;
+.battle-row.battle-animate-take .card {
+  --collapse-glow: var(--line);
 }
 
-.battle-row.battle-animate-take.battle-animate-player .attack-card {
-  animation: battleAttackToPlayer 600ms cubic-bezier(.2, .88, .2, 1) both;
+.battle-row.battle-animate-discard .attack-card,
+.battle-row.battle-animate-take .attack-card {
+  animation: battleAttackCollapse 600ms steps(10, end) both;
 }
 
-.battle-row.battle-animate-take.battle-animate-player .defense-card {
-  animation: battleDefenseToPlayer 600ms cubic-bezier(.2, .88, .2, 1) both;
+.battle-row.battle-animate-discard .defense-card,
+.battle-row.battle-animate-take .defense-card {
+  animation: battleDefenseCollapse 600ms steps(10, end) both;
 }
 
-.battle-row.battle-animate-take.battle-animate-ai .attack-card {
-  animation: battleAttackToAi 600ms cubic-bezier(.2, .88, .2, 1) both;
-}
-
-.battle-row.battle-animate-take.battle-animate-ai .defense-card {
-  animation: battleDefenseToAi 600ms cubic-bezier(.2, .88, .2, 1) both;
+.is-battle-cleared {
+  visibility: hidden;
 }
 
 .card-enter {
@@ -925,6 +944,10 @@ body.is-dragging-card .effect-tooltip {
 
 .defense-card.card-impact {
   animation-name: defenseCardImpact;
+}
+
+.hand-card.card-return-impact {
+  animation: handCardReturnImpact 280ms steps(7, end) both;
 }
 
 .is-animation-hidden {
@@ -1114,6 +1137,24 @@ body.is-dragging-card .effect-tooltip {
   }
 }
 
+@keyframes handCardReturnImpact {
+  0% {
+    transform: translateY(-18px) scale(0.92) rotate(-2deg);
+  }
+
+  35% {
+    transform: translateY(12px) scale(1.1, 0.88) rotate(1deg);
+  }
+
+  68% {
+    transform: translateY(-5px) scale(0.96, 1.06) rotate(-1deg);
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
 @keyframes beatenCardEnter {
   0% {
     transform: translate(-50%, calc(-50% - 14px)) scale(0.94) rotate(-2deg);
@@ -1146,99 +1187,67 @@ body.is-dragging-card .effect-tooltip {
   }
 }
 
-@keyframes battleAttackToDiscard {
+@keyframes counterStep {
   0% {
-    opacity: 1;
+    transform: scale(1);
+  }
+
+  44% {
+    transform: scale(1.28, 0.82);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes battleAttackCollapse {
+  0% {
     transform: translate(-50%, -50%) scale(1);
+    filter: contrast(1);
+    box-shadow: 5px 5px 0 var(--line-dim);
   }
 
-  55% {
-    opacity: 0.24;
+  24% {
+    transform: translate(-50%, -50%) scale(1.1, 0.82) rotate(-1deg);
+    box-shadow: 8px 8px 0 var(--collapse-glow, var(--line));
+  }
+
+  58% {
+    transform: translate(-50%, -50%) scale(0.58, 1.08) rotate(1deg);
+    filter: contrast(1.35);
+    box-shadow: 0 0 0 8px var(--collapse-glow, var(--line));
   }
 
   100% {
-    opacity: 0;
-    transform: translate(calc(-50% + 220px), calc(-50% - 18px)) scale(0.74) rotate(8deg);
+    transform: translate(-50%, -50%) scale(0.04, 0.04) rotate(-4deg);
+    filter: contrast(1.8);
+    box-shadow: 0 0 0 0 var(--collapse-glow, var(--line));
   }
 }
 
-@keyframes battleDefenseToDiscard {
+@keyframes battleDefenseCollapse {
   0% {
-    opacity: 1;
     transform: translate(-50%, -50%) rotate(var(--defense-rotation, 7deg)) scale(1);
+    filter: contrast(1);
+    box-shadow: 5px 5px 0 var(--line-dim);
   }
 
-  55% {
-    opacity: 0.24;
+  24% {
+    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) - 1deg)) scale(1.1, 0.82);
+    box-shadow: 8px 8px 0 var(--collapse-glow, var(--line));
   }
 
-  100% {
-    opacity: 0;
-    transform: translate(calc(-50% + 220px), calc(-50% - 18px)) rotate(calc(var(--defense-rotation, 7deg) + 8deg)) scale(0.74);
-  }
-}
-
-@keyframes battleAttackToPlayer {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  55% {
-    opacity: 0.24;
+  58% {
+    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) + 1deg)) scale(0.58, 1.08);
+    filter: contrast(1.35);
+    box-shadow: 0 0 0 8px var(--collapse-glow, var(--line));
   }
 
   100% {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 190px)) scale(0.76) rotate(-6deg);
-  }
-}
-
-@keyframes battleDefenseToPlayer {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) rotate(var(--defense-rotation, 7deg)) scale(1);
-  }
-
-  55% {
-    opacity: 0.24;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 190px)) rotate(calc(var(--defense-rotation, 7deg) - 6deg)) scale(0.76);
-  }
-}
-
-@keyframes battleAttackToAi {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  55% {
-    opacity: 0.24;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% - 160px)) scale(0.76) rotate(6deg);
-  }
-}
-
-@keyframes battleDefenseToAi {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) rotate(var(--defense-rotation, 7deg)) scale(1);
-  }
-
-  55% {
-    opacity: 0.24;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% - 160px)) rotate(calc(var(--defense-rotation, 7deg) + 6deg)) scale(0.76);
+    transform: translate(-50%, -50%) rotate(calc(var(--defense-rotation, 7deg) - 4deg)) scale(0.04, 0.04);
+    filter: contrast(1.8);
+    box-shadow: 0 0 0 0 var(--collapse-glow, var(--line));
   }
 }
 

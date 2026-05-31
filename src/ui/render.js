@@ -1,6 +1,8 @@
 import { cardLabel } from '../game/cards.js';
 import { GameAnimations } from './animations.js';
 
+const EFFECT_TOOLTIP_GAP = 40;
+
 function clear(element) {
   element.replaceChildren();
 }
@@ -152,6 +154,7 @@ export class GameRenderer {
     this.elements = elements;
     this.renderedBattleCardIds = new Set();
     this.handOffset = 0;
+    this.effectTooltipTarget = null;
     this.animations = new GameAnimations(elements, {
       createCardElement,
       createCardBackElement
@@ -166,7 +169,7 @@ export class GameRenderer {
       suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? [])
     };
     this.elements.battleNumber.textContent = String(state.battleNumber);
-    this.elements.discardCount.textContent = String(state.discardCount);
+    this.setDiscardCount(state.discardCount);
     this.elements.deckCount.textContent = String(state.deckCount);
 
     this.renderOpponent(state);
@@ -534,6 +537,39 @@ export class GameRenderer {
     await this.animations.play('battle-clear', { kind, actor });
   }
 
+  setDiscardCount(value) {
+    this.elements.discardCount.textContent = String(value);
+  }
+
+  async animateDiscardCount(fromValue, toValue) {
+    const from = Number(fromValue);
+    const to = Number(toValue);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+      this.setDiscardCount(toValue);
+      return;
+    }
+
+    const counter = this.elements.discardCount;
+    const steps = to - from;
+    const stepDelay = prefersReducedMotion()
+      ? 0
+      : Math.max(34, Math.min(90, Math.floor(560 / steps)));
+
+    this.setDiscardCount(from);
+    counter.classList.add('is-counting');
+
+    for (let value = from + 1; value <= to; value += 1) {
+      if (stepDelay) await wait(stepDelay);
+      this.setDiscardCount(value);
+      counter.classList.remove('count-step');
+      void counter.offsetWidth;
+      counter.classList.add('count-step');
+    }
+
+    if (stepDelay) await wait(90);
+    counter.classList.remove('is-counting', 'count-step');
+  }
+
   showGame() {
     this.elements.startScreen.classList.add('is-hidden');
     this.elements.gameScreen.classList.remove('is-hidden');
@@ -563,26 +599,43 @@ export class GameRenderer {
 
   bindEffectTooltip() {
     if (!this.elements.effectTooltip || !this.elements.gameScreen) return;
+    const tooltip = this.elements.effectTooltip;
 
     this.elements.gameScreen.addEventListener('pointerover', (event) => {
-      const effectTarget = event.target.closest('[data-effect-title]');
+      if (tooltip.contains(event.target)) return;
+      const effectTarget = this.getEffectTooltipTarget(event.target);
+      if (effectTarget && effectTarget === this.effectTooltipTarget) return;
       if (effectTarget) this.showEffectTooltip(effectTarget);
     });
 
     this.elements.gameScreen.addEventListener('pointerout', (event) => {
-      const effectTarget = event.target.closest('[data-effect-title]');
-      if (effectTarget && !effectTarget.contains(event.relatedTarget)) this.hideEffectTooltip();
+      if (tooltip.contains(event.target)) {
+        const nextEffectTarget = this.getEffectTooltipTarget(event.relatedTarget);
+        if (!tooltip.contains(event.relatedTarget) && !nextEffectTarget) this.hideEffectTooltip();
+        return;
+      }
+
+      const effectTarget = this.getEffectTooltipTarget(event.target);
+      if (!effectTarget) return;
+      if (effectTarget.contains(event.relatedTarget) || tooltip.contains(event.relatedTarget)) return;
+      this.hideEffectTooltip();
     });
 
     this.elements.gameScreen.addEventListener('focusin', (event) => {
-      const effectTarget = event.target.closest('[data-effect-title]');
+      const effectTarget = this.getEffectTooltipTarget(event.target);
+      if (effectTarget && effectTarget === this.effectTooltipTarget) return;
       if (effectTarget) this.showEffectTooltip(effectTarget);
     });
 
     this.elements.gameScreen.addEventListener('focusout', (event) => {
-      const effectTarget = event.target.closest('[data-effect-title]');
+      const effectTarget = this.getEffectTooltipTarget(event.target);
       if (effectTarget && !effectTarget.contains(event.relatedTarget)) this.hideEffectTooltip();
     });
+  }
+
+  getEffectTooltipTarget(target) {
+    if (!(target instanceof Element)) return null;
+    return target.closest('.card.has-effect[data-effect-title]');
   }
 
   showEffectTooltip(cardElement) {
@@ -593,11 +646,13 @@ export class GameRenderer {
 
     const rect = cardElement.getBoundingClientRect();
     tooltip.style.left = `${rect.left + rect.width / 2}px`;
-    tooltip.style.top = `${rect.top - 10}px`;
+    tooltip.style.top = `${rect.top - EFFECT_TOOLTIP_GAP}px`;
+    this.effectTooltipTarget = cardElement;
     tooltip.classList.remove('is-hidden');
   }
 
   hideEffectTooltip() {
+    this.effectTooltipTarget = null;
     this.elements.effectTooltip.classList.add('is-hidden');
   }
 }

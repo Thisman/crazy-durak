@@ -1,3 +1,7 @@
+const DRAG_SCALE = 1.15;
+const RETURN_DURATION_MS = 180;
+const RETURN_IMPACT_DURATION_MS = 280;
+
 export class DragController {
   constructor(options) {
     this.hand = options.hand;
@@ -25,21 +29,23 @@ export class DragController {
 
     const targetSet = new Set(targets);
     const dropTargets = this.collectDropTargets(targetSet);
-    const rect = source.getBoundingClientRect();
     const ghost = source.cloneNode(true);
     ghost.classList.add('drag-ghost');
-    ghost.style.width = `${rect.width}px`;
-    ghost.style.height = `${rect.height}px`;
+    source.classList.add('is-drag-source');
+
+    const sourceRect = source.getBoundingClientRect();
+    ghost.style.width = `${sourceRect.width}px`;
+    ghost.style.height = `${sourceRect.height}px`;
     document.body.append(ghost);
 
     this.active = {
       pointerId: event.pointerId,
       cardId,
       source,
-      sourceRect: rect,
+      sourceRect,
       ghost,
-      offsetX: rect.width / 2,
-      offsetY: rect.height / 2,
+      offsetX: sourceRect.width / 2,
+      offsetY: sourceRect.height / 2,
       targets,
       targetSet,
       dropTargets,
@@ -48,7 +54,6 @@ export class DragController {
       lastClientY: event.clientY
     };
 
-    source.classList.add('is-drag-source');
     this.onDragStart({ cardId, source });
     document.body.classList.add('is-dragging-card');
     this.markEligibleTargets(dropTargets);
@@ -120,7 +125,7 @@ export class DragController {
 
   moveGhost(clientX, clientY) {
     const { ghost, offsetX, offsetY } = this.active;
-    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(1.06) rotate(-1deg)`;
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${DRAG_SCALE}) rotate(-1deg)`;
   }
 
   updateActiveTarget(clientX, clientY) {
@@ -194,16 +199,38 @@ export class DragController {
   }
 
   animateBack(active) {
-    const { ghost, source, sourceRect } = active;
-    ghost.classList.add('is-returning');
-    ghost.style.transform = `translate3d(${sourceRect.left}px, ${sourceRect.top}px, 0) scale(1)`;
-    window.setTimeout(() => {
-      ghost.remove();
-      source.classList.remove('is-drag-source');
-    }, 190);
+    const { ghost, source } = active;
+    const startTransform = ghost.style.transform;
+    const targetRect = source.getBoundingClientRect();
+    const endTransform = `translate3d(${targetRect.left}px, ${targetRect.top}px, 0) scale(1) rotate(0deg)`;
+
     this.detachWindowEvents();
     this.active = null;
     this.onDragEnd({ cardId: active.cardId, source, dropped: false });
+
+    ghost.classList.add('is-returning');
+    ghost.style.transition = 'none';
+    ghost.style.transform = startTransform;
+
+    const animation = ghost.animate([
+      { transform: startTransform, opacity: 0.98 },
+      { transform: endTransform, opacity: 0.98 }
+    ], {
+      duration: RETURN_DURATION_MS,
+      easing: 'cubic-bezier(.18, .9, .24, 1)',
+      fill: 'forwards'
+    });
+
+    animation.finished.catch(() => {}).then(() => {
+      animation.cancel();
+      source.classList.add('card-return-impact');
+      source.classList.remove('is-drag-source');
+      ghost.remove();
+
+      const cleanupImpact = () => source.classList.remove('card-return-impact');
+      source.addEventListener('animationend', cleanupImpact, { once: true });
+      window.setTimeout(cleanupImpact, RETURN_IMPACT_DURATION_MS + 60);
+    });
   }
 
   detachWindowEvents() {
