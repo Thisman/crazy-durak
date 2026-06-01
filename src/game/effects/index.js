@@ -11,6 +11,7 @@ import { clone } from './clone.js';
 import { blackMark } from './black-mark.js';
 import { handSwap } from './hand-swap.js';
 import { nullifyEffect } from './nullify-effect.js';
+import { curse } from './curse.js';
 
 /**
  * @typedef {Object} EffectDefinition
@@ -42,7 +43,7 @@ export function registerEffect(effect) {
 
 const BUILT_IN_EFFECTS = [
   doubleCover, rankLock, rust, rankUp, blindDefense, bounce,
-  forbidSuit, spear, barrier, clone, blackMark, handSwap, nullifyEffect
+  forbidSuit, spear, barrier, clone, blackMark, handSwap, nullifyEffect, curse
 ];
 
 BUILT_IN_EFFECTS.forEach(registerEffect);
