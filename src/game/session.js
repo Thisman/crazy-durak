@@ -35,6 +35,12 @@ export function cloneBattle(battle = []) {
       defenseOrders: Array.isArray(slot.defenseOrders)
         ? slot.defenseOrders.map((order) => (Number.isFinite(order) ? order : null))
         : (Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : []),
+      defensePixelOffsets: Array.isArray(slot.defensePixelOffsets)
+        ? slot.defensePixelOffsets.map((offset) => (offset ? { ...offset } : null))
+        : [],
+      defenseRotations: Array.isArray(slot.defenseRotations)
+        ? [...slot.defenseRotations]
+        : [],
       requiredDefenseCount: slot.requiredDefenseCount ?? 1,
       source: slot.source ?? null,
       rustyAttack: Boolean(slot.rustyAttack),

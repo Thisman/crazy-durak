@@ -123,6 +123,7 @@ export function moveTableGroup(state, groupId, position) {
     }, previousDefensePosition);
   });
   slot.defensePosition = slot.defensePositions.at(-1) ?? null;
+  slot.defensePixelOffsets = slot.defensePositions.map(() => null);
 
   return {
     groupId,

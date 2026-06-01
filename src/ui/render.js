@@ -98,6 +98,13 @@ function slotPosition(element) {
 }
 
 function defenseLayout(slot, index, battleRect) {
+  const rotation = slot.defenseRotations?.[index] ?? (index % 2 ? 8 : -5);
+
+  const pixelOffset = slot.defensePixelOffsets?.[index];
+  if (pixelOffset) {
+    return { x: pixelOffset.x, y: pixelOffset.y, rotation };
+  }
+
   const storedPosition = slot.defensePositions?.[index] ?? (index === 0 ? slot.defensePosition : null);
   const shouldUseStoredPosition = storedPosition && slot.defenseSources?.[index] !== 'ai';
 
@@ -111,27 +118,23 @@ function defenseLayout(slot, index, battleRect) {
     return {
       x: (defensePosition.x - attackPosition.x) * battleRect.width,
       y: (defensePosition.y - attackPosition.y) * battleRect.height,
-      rotation: index % 2 ? 8 : -5
+      rotation
     };
   }
 
   if ((slot.requiredDefenseCount ?? 1) > 1) {
     const doubleCover = [
-      { x: -22, y: 30, rotation: -7 },
-      { x: 26, y: 30, rotation: 8 }
+      { x: -22, y: 30 },
+      { x: 26, y: 30 }
     ];
-
-    return doubleCover[index] ?? {
-      x: 2 + index * 10,
-      y: 42 + index * 6,
-      rotation: index % 2 ? 9 : -9
-    };
+    const base = doubleCover[index] ?? { x: 2 + index * 10, y: 42 + index * 6 };
+    return { ...base, rotation };
   }
 
   return {
     x: 20 + index * 18,
     y: 30 + index * 10,
-    rotation: 7 + index * 4
+    rotation: slot.defenseRotations?.[index] ?? (7 + index * 4)
   };
 }
 

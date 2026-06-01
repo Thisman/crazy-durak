@@ -128,7 +128,12 @@ export class DragController {
     const active = this.active;
     const position = this.getTablePosition(event.clientX, event.clientY);
     const targetId = active.currentTarget?.dataset.dropTarget ?? null;
-    const drop = targetId ? { id: targetId, position } : null;
+    const targetRect = active.currentTarget?.getBoundingClientRect();
+    const pixelOffset = targetRect ? {
+      x: Math.round(event.clientX - (targetRect.left + targetRect.width / 2)),
+      y: Math.round(event.clientY - (targetRect.top + targetRect.height / 2))
+    } : null;
+    const drop = targetId ? { id: targetId, position, pixelOffset } : null;
     const tableMove = active.kind === 'table' && this.isSlotPositionValid(event.clientX, event.clientY, active.sourceRect)
       ? { groupId: active.groupId, position }
       : null;

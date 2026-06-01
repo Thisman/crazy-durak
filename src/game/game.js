@@ -88,7 +88,7 @@ export class DurakGame {
     return this.playCardToTargetAt(cardId, target, null);
   }
 
-  playCardToTargetAt(cardId, target, position = null) {
+  playCardToTargetAt(cardId, target, position = null, pixelOffset = null) {
     const card = findCard(this.state.hands.player, cardId);
     const fieldModel = createFieldModel(this.state, 'player');
     const cardModel = createCardModel(card, this.state, 'player');
@@ -113,7 +113,7 @@ export class DurakGame {
 
     if (resolvedTarget.startsWith('attack-card:')) {
       const defensePosition = target === 'table' ? null : position;
-      return this.playDefense(resolvedTarget.replace('attack-card:', ''), cardId, defensePosition);
+      return this.playDefense(resolvedTarget.replace('attack-card:', ''), cardId, defensePosition, pixelOffset);
     }
 
     return this.result(false, 'Неизвестная цель для карты.');
@@ -168,7 +168,7 @@ export class DurakGame {
     return this.afterPlayerAction();
   }
 
-  playDefense(attackCardId, defenseCardId, position = null) {
+  playDefense(attackCardId, defenseCardId, position = null, pixelOffset = null) {
     if (this.state.defender !== 'player') {
       return this.result(false, 'Сейчас вы не защищаетесь.');
     }
@@ -187,11 +187,18 @@ export class DurakGame {
     slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
     slot.defenseSources ??= [];
     slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
+    slot.defensePixelOffsets ??= [];
+    slot.defenseRotations ??= [];
     const defenseOrder = nextPlayOrder(this.state);
+    const defenseRotation = this.rng() > 0.5
+      ? (5 + Math.round(this.rng() * 5))
+      : -(5 + Math.round(this.rng() * 5));
     slot.defenses.push(defense);
     slot.defensePositions.push(defensePosition);
     slot.defenseSources.push('player');
     slot.defenseOrders.push(defenseOrder);
+    slot.defensePixelOffsets.push(pixelOffset ?? null);
+    slot.defenseRotations.push(defenseRotation);
     slot.defense = defense;
     slot.defensePosition = defensePosition;
     slot.defenseOrder = defenseOrder;
@@ -471,11 +478,18 @@ export class DurakGame {
     slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
     slot.defenseSources ??= [];
     slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
+    slot.defensePixelOffsets ??= [];
+    slot.defenseRotations ??= [];
     const defenseOrder = nextPlayOrder(this.state);
+    const defenseRotation = this.rng() > 0.5
+      ? (5 + Math.round(this.rng() * 5))
+      : -(5 + Math.round(this.rng() * 5));
     slot.defenses.push(defense);
     slot.defensePositions.push(defensePosition);
     slot.defenseSources.push('ai');
     slot.defenseOrders.push(defenseOrder);
+    slot.defensePixelOffsets.push(null);
+    slot.defenseRotations.push(defenseRotation);
     slot.defense = defense;
     slot.defensePosition = defensePosition;
     slot.defenseOrder = defenseOrder;

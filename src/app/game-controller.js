@@ -89,7 +89,7 @@ export class GameController {
 
   handleDrop(cardId, target) {
     return this.#runAction(
-      () => this.#game.playCardToTargetAt(cardId, target.id, target.position),
+      () => this.#game.playCardToTargetAt(cardId, target.id, target.position, target.pixelOffset),
       { suppressEnterCardIds: [cardId], impactCardId: cardId }
     );
   }
