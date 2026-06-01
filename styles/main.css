@@ -801,23 +801,12 @@ body.is-dragging-card .effect-tooltip {
 }
 
 /* ── Legendary card ─────────────────────────────────────────────────────────── */
-/* Dark amber gradient background, neon-gold glow, pixel-stepped shimmer.       */
-/* Applied when a card carries an effect listed in EFFECT_CONFIG.legendary.     */
+/* White background (same as normal), neon-gold border glow, pixel-stepped      */
+/* shimmer. Applied when a card carries an effect in EFFECT_CONFIG.legendary.   */
 
 .card.is-legendary {
   border-color: #ffd040;
-  background:
-    linear-gradient(90deg, rgba(255, 200, 40, 0.13) 2px, transparent 2px),
-    linear-gradient(180deg, rgba(255, 200, 40, 0.13) 2px, transparent 2px),
-    linear-gradient(155deg, #0d0800 0%, #281500 28%, #180e00 54%, #281500 76%, #0d0800 100%);
-  background-size: 16px 16px, 16px 16px, 100% 100%;
-  color: #ffd040;
   animation: legendaryGlow 2800ms steps(6, end) infinite;
-}
-
-/* red suits: keep distinguishable against dark background */
-.card.suit-red.is-legendary {
-  color: #ff7840;
 }
 
 .card.is-legendary .effect-badge {
