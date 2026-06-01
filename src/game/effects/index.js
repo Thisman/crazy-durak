@@ -47,11 +47,29 @@ const BUILT_IN_EFFECTS = [
 
 BUILT_IN_EFFECTS.forEach(registerEffect);
 
-// ─── EFFECT_IDS (derived from registry — add effect file → constant appears automatically) ───
+// ─── EFFECT_IDS ──────────────────────────────────────────────────────────────────────────────
+// Proxy-backed: keys are derived from the registry at access time, so newly registered effects
+// are immediately visible via EFFECT_IDS.MY_NEW_EFFECT without re-importing.
 
-export const EFFECT_IDS = Object.fromEntries(
-  [...registry.keys()].map((id) => [id.toUpperCase(), id])
-);
+export const EFFECT_IDS = new Proxy({}, {
+  get(_, key) {
+    if (typeof key !== 'string') return undefined;
+    const id = key.toLowerCase();
+    return registry.has(id) ? id : undefined;
+  },
+  has(_, key) {
+    return typeof key === 'string' && registry.has(key.toLowerCase());
+  },
+  ownKeys() {
+    return [...registry.keys()].map((id) => id.toUpperCase());
+  },
+  getOwnPropertyDescriptor(_, key) {
+    if (typeof key !== 'string') return undefined;
+    const id = key.toLowerCase();
+    if (!registry.has(id)) return undefined;
+    return { configurable: true, enumerable: true, value: id };
+  }
+});
 
 // ─── Definitions list (for UI / random assignment) ───────────────────────────────────────────
 
