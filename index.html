@@ -61,6 +61,7 @@
             <div class="player-controls">
               <button id="take-button" class="secondary-action" type="button">Взять</button>
               <button id="finish-button" class="secondary-action" type="button">Бито</button>
+              <button id="help-button" class="help-action" type="button" aria-label="Справочник эффектов">?</button>
             </div>
             <div class="hand-slider">
               <button id="hand-prev" class="hand-arrow" type="button" aria-label="Прокрутить карты игрока влево">‹</button>
@@ -78,6 +79,16 @@
         <div>
           <strong class="effect-tooltip-title"></strong>
           <p class="effect-tooltip-copy"></p>
+        </div>
+      </div>
+
+      <div id="glossary-modal" class="glossary-overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="glossary-title">
+        <div class="glossary-panel">
+          <div class="glossary-header">
+            <h2 id="glossary-title" class="glossary-title">Эффекты карт</h2>
+            <button id="glossary-close" class="glossary-close" type="button" aria-label="Закрыть">✕</button>
+          </div>
+          <ul id="glossary-list" class="glossary-list"></ul>
         </div>
       </div>
 

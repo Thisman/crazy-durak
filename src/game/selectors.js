@@ -1,7 +1,7 @@
 import { SUIT_BY_ID, sortCards } from './cards.js';
 import { EFFECT_IDS, hasEffect, isLegendaryEffect } from './effects.js';
 import { detectPhase } from './lifecycle.js';
-import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel } from './model.js';
+import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel, getCardDropTargets } from './model.js';
 import { canFinishBattle, isSlotDefended, slotDefenses } from './rules.js';
 import { cloneBattle, cloneCard } from './session.js';
 import { getSlotZModel } from './table-model.js';
@@ -95,6 +95,10 @@ export function buildPublicState(state) {
     const model = createCardModel(card, state, 'player');
     const targets = model.isValid(cardsInPlay) ? model.getDropTargets(cardsInPlay) : [];
     legalTargets[card.id] = targets;
+    const isFrozen = (state.frozenCardIds ?? []).includes(card.id);
+    const isFrozenBlocking = isFrozen
+      ? getCardDropTargets(card, state, 'player', cardsInPlay, true).length > 0
+      : false;
     playerCardModels.push({
       ...card,
       nominal: model.nominal,
@@ -113,7 +117,9 @@ export function buildPublicState(state) {
       dragCardIds: [...(model.dragCardIds ?? [])],
       animationProfile: model.animationProfile,
       canDrag: model.canDrag(),
-      isValid: targets.length > 0
+      isValid: targets.length > 0,
+      isFrozen,
+      isFrozenBlocking
     });
   }
 

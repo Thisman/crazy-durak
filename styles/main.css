@@ -595,9 +595,94 @@ button:disabled {
   cursor: grabbing;
 }
 
-.hand-card:disabled {
+.hand-card:disabled:not(.is-frozen-blocking) {
   filter: saturate(0.72);
   opacity: 0.58;
+}
+
+/* ── Effect-target cards ─────────────────────────────────────────────────────── */
+/* Cards that are the target of an active effect get a persistent indicator.     */
+/* .is-frozen  → blocked by shackle for this battle                              */
+
+.hand-card.is-frozen {
+  border-color: #7a28e0;
+  box-shadow: 5px 5px 0 #280060;
+  animation: frozenGlitch 1400ms steps(1, end) infinite;
+}
+
+/* Persistent purple scanlines — always on while frozen */
+.hand-card.is-frozen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(100, 20, 230, 0.18) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* Glitch slice — fires during burst only */
+.hand-card.is-frozen::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: rgba(130, 50, 255, 0.42);
+  animation: frozenSlice 1400ms steps(1, end) infinite;
+}
+
+@keyframes frozenGlitch {
+  /* Idle: purple border */
+  0%, 26%, 100% {
+    transform: none;
+    border-color: #7a28e0;
+  }
+
+  /* Burst 1 */
+  27% { transform: translate(-3px, 0);            border-color: #b060ff; }
+  28% { transform: translate(3px, 0) skewX(-2deg); border-color: #7a28e0; }
+  29% { transform: translate(-2px, 0);            border-color: #b060ff; }
+  30% { transform: translate(2px, 0);             border-color: #7a28e0; }
+  31% { transform: translate(-1px, 0) skewX(1deg); border-color: #b060ff; }
+  32%, 42% { transform: none; border-color: #7a28e0; }
+
+  /* Burst 2 */
+  43% { transform: translate(3px, 0);             border-color: #b060ff; }
+  44% { transform: translate(-2px, 0) skewX(-1deg); border-color: #7a28e0; }
+  45% { transform: translate(2px, 0);             border-color: #b060ff; }
+  46%, 47% { transform: none; border-color: #7a28e0; }
+}
+
+@keyframes frozenSlice {
+  /* Hidden outside bursts */
+  0%, 26%, 48%, 100% { opacity: 0; height: 0; top: 0; }
+
+  /* Burst 1 */
+  27% { opacity: 1;   top: 18%; height: 12%; transform: translate(-5px, 0); }
+  28% { opacity: 0.7; top: 58%; height:  9%; transform: translate(6px,  0); }
+  29% { opacity: 1;   top: 36%; height: 13%; transform: translate(-4px, 0); }
+  30%, 42% { opacity: 0; height: 0; }
+
+  /* Burst 2 */
+  43% { opacity: 0.9; top: 46%; height: 8%; transform: translate(4px, 0); }
+  44% { opacity: 0.7; top: 28%; height: 10%; transform: translate(-5px, 0); }
+  45%, 47% { opacity: 0; height: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-card.is-frozen {
+    animation: none;
+  }
+
+  .hand-card.is-frozen::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .is-drag-source {
@@ -798,6 +883,24 @@ body.is-dragging-card .effect-tooltip {
 
 .suit-black {
   color: var(--ink-invert);
+}
+
+/* ── Legendary card play ring ────────────────────────────────────────────────── */
+/* Gold border wave that expands and fades when a legendary card lands on table. */
+
+.legendary-ring {
+  position: absolute;
+  inset: -4px;
+  border: 4px solid #ffd040;
+  box-shadow: 0 0 10px rgba(255, 208, 64, 0.65);
+  pointer-events: none;
+  z-index: 10;
+  animation: legendaryRing 640ms steps(8, end) both;
+}
+
+@keyframes legendaryRing {
+  0%   { transform: scale(1);   opacity: 1; }
+  100% { transform: scale(1.7); opacity: 0; }
 }
 
 /* ── Legendary card ─────────────────────────────────────────────────────────── */
@@ -1418,6 +1521,184 @@ body.is-dragging-card .effect-tooltip {
   color: var(--muted);
   font-size: 10px;
   line-height: 1.8;
+}
+
+/* ── Help button ─────────────────────────────────────────────────────────────── */
+
+.help-action {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin-left: 10px;
+  border: 3px solid var(--line-dim);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  box-shadow: 3px 3px 0 var(--line-dim);
+  transition: color 80ms steps(2, end), border-color 80ms steps(2, end), background 80ms steps(2, end);
+}
+
+.help-action:hover {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--line-dim);
+}
+
+/* ── Glossary modal ──────────────────────────────────────────────────────────── */
+
+.glossary-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 8px),
+    rgba(0, 0, 0, 0.85);
+}
+
+.glossary-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(500px, 100%);
+  max-height: min(80vh, 640px);
+  border: 4px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.glossary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 18px 20px 14px;
+  border-bottom: 3px solid var(--line-dim);
+}
+
+.glossary-title {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.glossary-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid var(--line-dim);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: 2px 2px 0 var(--line-dim);
+}
+
+.glossary-close:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.glossary-list {
+  flex: 1;
+  margin: 0;
+  padding: 10px 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.glossary-item {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 20px;
+  border-left: 4px solid transparent;
+}
+
+.glossary-item + .glossary-item {
+  border-top: 2px solid var(--line-dim);
+}
+
+.glossary-item-legendary {
+  border-left-color: #ffd040;
+  background: rgba(255, 208, 64, 0.04);
+}
+
+.glossary-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid var(--line);
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.glossary-item-legendary .glossary-icon {
+  background: #ffd040;
+  border-color: #7a4600;
+  color: #0d0800;
+}
+
+.glossary-item-body {
+  min-width: 0;
+}
+
+.glossary-item-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.glossary-item-legendary .glossary-item-title::before {
+  content: "★ ЛЕГЕНДА";
+  display: block;
+  font-size: 7px;
+  color: #ffd040;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+.glossary-item-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.7;
+}
+
+/* ── Effect target pulse ─────────────────────────────────────────────────────── */
+
+.card.effect-target-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  z-index: 3;
+  border: 3px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--surface), 0 0 0 7px var(--accent-soft);
+  pointer-events: none;
+  animation: effectTargetPulse 560ms steps(7, end) both;
+}
+
+@keyframes effectTargetPulse {
+  0%   { opacity: 0; transform: scale(1.16); }
+  14%  { opacity: 1; transform: scale(1.04); }
+  58%  { opacity: 0.82; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.88); }
 }
 
 @media (prefers-reduced-motion: reduce) {

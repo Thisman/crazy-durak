@@ -215,7 +215,10 @@ export class GameRenderer {
       }
       if (this.shouldHideCard(slot.attack.id)) attack.classList.add('is-animation-hidden');
       currentCardIds.add(slot.attack.id);
-      if (this.shouldAnimateCardEnter(slot.attack.id, previousCardIds)) attack.classList.add('card-enter');
+      if (this.shouldAnimateCardEnter(slot.attack.id, previousCardIds)) {
+        attack.classList.add('card-enter');
+        if (attack.dataset.legendary === 'true') this.spawnLegendaryRing(attack);
+      }
       pair.append(attack);
 
       const defenses = slot.defenses?.length ? slot.defenses : (slot.defense ? [slot.defense] : []);
@@ -246,7 +249,10 @@ export class GameRenderer {
             defense.dataset.dropTarget = `attack-card:${slot.attack.id}`;
           }
           if (this.shouldHideCard(defenseCard.id)) defense.classList.add('is-animation-hidden');
-          if (this.shouldAnimateCardEnter(defenseCard.id, previousCardIds)) defense.classList.add('card-enter');
+          if (this.shouldAnimateCardEnter(defenseCard.id, previousCardIds)) {
+            defense.classList.add('card-enter');
+            if (defense.dataset.legendary === 'true') this.spawnLegendaryRing(defense);
+          }
           pair.append(defense);
         });
       }
@@ -283,6 +289,10 @@ export class GameRenderer {
       cardElement.dataset.dropTargets = targets.join(',');
       cardElement.disabled = targets.length === 0;
       cardElement.classList.toggle('is-valid', Boolean(card.isValid));
+      if (card.isFrozen) {
+        cardElement.classList.add('is-frozen');
+        if (card.isFrozenBlocking) cardElement.classList.add('is-frozen-blocking');
+      }
       cardElement.title = targets.length ? `${cardLabel(card)} можно сыграть` : `${cardLabel(card)} пока нельзя сыграть`;
       this.elements.playerHand.append(cardElement);
     }
@@ -412,7 +422,15 @@ export class GameRenderer {
         void el.offsetWidth;
         el.classList.add('effect-trigger');
       }
+      if (el.dataset.legendary === 'true') this.spawnLegendaryRing(el);
     }
+  }
+
+  spawnLegendaryRing(cardElement) {
+    const ring = document.createElement('div');
+    ring.className = 'legendary-ring';
+    cardElement.append(ring);
+    window.setTimeout(() => ring.remove(), 700);
   }
 
   async animateOpponentTurn() {
@@ -525,16 +543,27 @@ export class GameRenderer {
   }
 
   async playTransitions(transitions = [], context = {}) {
-    const clearTransition = transitions.find((transition) => transition.type === 'battle-clear');
-    if (!clearTransition || context.phase !== 'before-render') return;
+    if (context.phase === 'before-render') {
+      const clearTransition = transitions.find((transition) => transition.type === 'battle-clear');
+      if (!clearTransition) return;
 
-    const countAnimation = clearTransition.kind === 'discard'
-      ? this.animateDiscardCount(context.previousState?.discardCount, context.nextState?.discardCount)
-      : Promise.resolve();
-    await Promise.all([
-      this.animateBattleClear(clearTransition.kind, clearTransition.actor),
-      countAnimation
-    ]);
+      const countAnimation = clearTransition.kind === 'discard'
+        ? this.animateDiscardCount(context.previousState?.discardCount, context.nextState?.discardCount)
+        : Promise.resolve();
+      await Promise.all([
+        this.animateBattleClear(clearTransition.kind, clearTransition.actor),
+        countAnimation
+      ]);
+      return;
+    }
+
+    if (context.phase === 'post-render') {
+      await this.animations.play('effect-source-wait');
+      const targetPulse = transitions.find((t) => t.type === 'effect-target-pulse');
+      if (targetPulse) {
+        await this.animations.play('effect-target-pulse', { cardIds: targetPulse.cardIds });
+      }
+    }
   }
 
   setDiscardCount(value) {

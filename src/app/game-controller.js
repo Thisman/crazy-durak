@@ -168,6 +168,8 @@ export class GameController {
       await this.#renderer.waitForTableCards(enterCardIds);
     }
 
+    await this.#renderer.playTransitions(transitions, { phase: 'post-render' });
+
     return true;
   }
 

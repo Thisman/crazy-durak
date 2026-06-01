@@ -6,6 +6,7 @@ export const TRANSITION_TYPES = {
   CARD_DISCARD: 'card-discard',
   BATTLE_CLEAR: 'battle-clear',
   EFFECT_PULSE: 'effect-pulse',
+  EFFECT_TARGET_PULSE: 'effect-target-pulse',
   TABLE_GROUP_MOVE: 'table-group-move'
 };
 
@@ -40,6 +41,12 @@ export function createEffectPulseTransition(cardIds) {
   const ids = [...new Set((cardIds ?? []).filter(Boolean))];
   if (!ids.length) return null;
   return createTransition(TRANSITION_TYPES.EFFECT_PULSE, { cardIds: ids });
+}
+
+export function createEffectTargetPulseTransition(cardIds) {
+  const ids = [...new Set((cardIds ?? []).filter(Boolean))];
+  if (!ids.length) return null;
+  return createTransition(TRANSITION_TYPES.EFFECT_TARGET_PULSE, { cardIds: ids });
 }
 
 export function createTableGroupMoveTransition(groupId, position, cardIds = []) {

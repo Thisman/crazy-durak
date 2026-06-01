@@ -5,7 +5,6 @@ export const rankLock = {
   icon: 'fa-solid fa-ban',
 
   apply(cardModel, zones, context) {
-    if (!context.isAttackLike) return null;
     context.state.blockedThrowRanks ??= [];
     if (!context.state.blockedThrowRanks.includes(cardModel.rank)) {
       context.state.blockedThrowRanks.push(cardModel.rank);

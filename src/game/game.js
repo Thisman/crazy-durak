@@ -38,6 +38,7 @@ import { nextPlayOrder, startNextBattle as applyNextBattle, swapRoles as swapTur
 export { GamePhase } from './lifecycle.js';
 import {
   createCardActionTransitions,
+  createEffectTargetPulseTransition,
   createTableGroupMoveTransition,
   normalizeTransitions
 } from './transitions.js';
@@ -387,6 +388,11 @@ export class DurakGame {
         const pulseCard = this.#findBattleCard(id);
         if (pulseCard) pulseCard.effectPulse = true;
       }
+    }
+
+    if (Array.isArray(outcome?.targetPulseIds) && outcome.targetPulseIds.length) {
+      const transition = createEffectTargetPulseTransition(outcome.targetPulseIds);
+      if (transition) this.enqueueTransitions([transition]);
     }
 
     if (outcome?.spawnedCard) {

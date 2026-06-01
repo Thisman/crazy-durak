@@ -1,6 +1,7 @@
 import { GameController } from './app/game-controller.js';
 import { DragController } from './ui/drag.js';
 import { GameRenderer } from './ui/render.js';
+import { buildGlossary } from './ui/effect-glossary.js';
 
 const elements = {
   startScreen: document.querySelector('#start-screen'),
@@ -21,6 +22,10 @@ const elements = {
   handNext: document.querySelector('#hand-next'),
   takeButton: document.querySelector('#take-button'),
   finishButton: document.querySelector('#finish-button'),
+  helpButton: document.querySelector('#help-button'),
+  glossaryModal: document.querySelector('#glossary-modal'),
+  glossaryClose: document.querySelector('#glossary-close'),
+  glossaryList: document.querySelector('#glossary-list'),
   resultModal: document.querySelector('#result-modal'),
   resultTitle: document.querySelector('#result-title'),
   resultCopy: document.querySelector('#result-copy'),
@@ -48,5 +53,26 @@ elements.takeButton.addEventListener('click', () => controller.takeCards());
 elements.finishButton.addEventListener('click', () => controller.finishBattle());
 elements.handPrev.addEventListener('click', () => renderer.slideHand(-1));
 elements.handNext.addEventListener('click', () => renderer.slideHand(1));
+
+function openGlossary() {
+  buildGlossary(elements.glossaryList);
+  elements.glossaryModal.classList.remove('is-hidden');
+  elements.glossaryClose.focus();
+}
+
+function closeGlossary() {
+  elements.glossaryModal.classList.add('is-hidden');
+}
+
+elements.helpButton.addEventListener('click', openGlossary);
+elements.glossaryClose.addEventListener('click', closeGlossary);
+elements.glossaryModal.addEventListener('click', (event) => {
+  if (event.target === elements.glossaryModal) closeGlossary();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !elements.glossaryModal.classList.contains('is-hidden')) {
+    closeGlossary();
+  }
+});
 
 renderer.render(controller.currentState);

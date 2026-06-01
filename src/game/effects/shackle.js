@@ -28,7 +28,8 @@ export const shackle = {
     return {
       applied: true,
       message: `заблокированы карты защитника: ${names}`,
-      pulseIds: [cardModel.id]
+      pulseIds: [cardModel.id],
+      targetPulseIds: picked.map((c) => c.id)
     };
   }
 };

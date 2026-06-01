@@ -66,6 +66,10 @@ export class GameAnimations {
         return this.playTableCardEnter(payload);
       case 'opponent-card-to-table':
         return this.playOpponentCardToTable(payload);
+      case 'effect-source-wait':
+        return this.playEffectSourceWait();
+      case 'effect-target-pulse':
+        return this.playEffectTargetPulse(payload);
       default:
         return Promise.resolve();
     }
@@ -131,6 +135,26 @@ export class GameAnimations {
       table.append(burst);
       window.setTimeout(() => burst.remove(), 340);
     }
+  }
+
+  async playEffectSourceWait() {
+    const triggered = [...this.elements.battleRow.querySelectorAll('.card.effect-trigger')];
+    if (!triggered.length) return;
+    await waitForAnyAnimation(triggered, 640);
+  }
+
+  async playEffectTargetPulse({ cardIds } = {}) {
+    if (!cardIds?.length) return;
+
+    const targets = cardIds
+      .map((id) => document.querySelector(`[data-card-id="${CSS.escape(id)}"]`))
+      .filter(Boolean);
+
+    if (!targets.length) return;
+
+    targets.forEach((el) => el.classList.add('effect-target-pulse'));
+    await waitForAnyAnimation(targets, 640);
+    targets.forEach((el) => el.classList.remove('effect-target-pulse'));
   }
 
   async playTableCardEnter({ cardIds } = {}) {

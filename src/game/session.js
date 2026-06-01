@@ -159,8 +159,12 @@ export function rebuildBattleEffectState(state) {
     }
 
     for (const defense of slotDefenses(slot)) {
-      if (getCardEffectId(defense) === EFFECT_IDS.BARRIER) {
+      const defenseEffectId = getCardEffectId(defense);
+      if (defenseEffectId === EFFECT_IDS.BARRIER) {
         state.forcedAttackSuit = defense.suit;
+      }
+      if (defenseEffectId === EFFECT_IDS.RANK_LOCK) {
+        addUnique(state.blockedThrowRanks, defense.rank);
       }
     }
   }

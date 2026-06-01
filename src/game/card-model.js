@@ -65,9 +65,9 @@ export function canCardTransfer(card, state, actor) {
   return canTransfer(state, actor, card);
 }
 
-export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards(state.battle)) {
+export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards(state.battle), skipFrozenCheck = false) {
   if (!card || state.phase !== 'playing') return [];
-  if ((state.frozenCardIds ?? []).includes(card.id)) return [];
+  if (!skipFrozenCheck && (state.frozenCardIds ?? []).includes(card.id)) return [];
 
   const normalizedCardsInPlay = normalizeCards(cardsInPlay);
   const ranksInPlay = normalizedCardsInPlay.length
