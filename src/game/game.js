@@ -39,6 +39,8 @@ import {
   normalizePosition
 } from './table-model.js';
 import { nextPlayOrder, startNextBattle as applyNextBattle, swapRoles as swapTurnRoles } from './turn-order.js';
+import { detectPhase, GamePhase } from './lifecycle.js';
+export { GamePhase } from './lifecycle.js';
 import {
   createBattleClearTransition,
   createCardActionTransitions,
@@ -149,6 +151,7 @@ export class DurakGame {
 
     return {
       phase: this.state.phase,
+      gamePhase: detectPhase(this.state),
       winner: this.state.winner,
       battleNumber: this.state.battleNumber,
       trumpSuit: this.state.trumpSuit,

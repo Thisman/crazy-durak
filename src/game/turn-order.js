@@ -1,4 +1,5 @@
-import { allDefended, isSlotDefended, opponentOf } from './rules.js';
+import { isSlotDefended, opponentOf } from './rules.js';
+export { shouldAiAct } from './lifecycle.js';
 
 export function maxPlayOrder(state) {
   let maxOrder = 0;
@@ -41,10 +42,3 @@ export function startNextBattle(state, attacker) {
   state.effectPulseIds = [];
 }
 
-export function shouldAiAct(state) {
-  if (state.phase !== 'playing') return false;
-  if (state.attacker === 'ai' && state.battle.length === 0) return true;
-  if (state.defender === 'ai' && state.battle.some((slot) => !isSlotDefended(slot))) return true;
-  if (state.attacker === 'ai' && state.battle.length > 0 && allDefended(state.battle)) return true;
-  return false;
-}
