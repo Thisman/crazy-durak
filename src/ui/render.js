@@ -396,7 +396,14 @@ export class GameRenderer {
 
   revealBattleCards(cardIds) {
     for (const cardId of cardIds) {
-      this.getBattleCardElement(cardId)?.classList.remove('is-animation-hidden');
+      const el = this.getBattleCardElement(cardId);
+      if (!el) continue;
+      el.classList.remove('is-animation-hidden');
+      if (el.classList.contains('effect-trigger')) {
+        el.classList.remove('effect-trigger');
+        void el.offsetWidth;
+        el.classList.add('effect-trigger');
+      }
     }
   }
 
