@@ -251,19 +251,6 @@ export class DurakGame {
     if (!moved) return this.result(false, 'Эту группу карт нельзя переместить.');
 
     this.#clearEffectPulse();
-    if (moved.cardIds.length > 0) {
-      const movedSlot = this.state.battle.find((slot) =>
-        slot.attack?.id === moved.cardIds[0]
-        || (slot.defenses ?? []).some((d) => d.id === moved.cardIds[0])
-      );
-      if (movedSlot && !isSlotDefended(movedSlot)) {
-        for (const cardId of moved.cardIds) {
-          const card = this.#findBattleCard(cardId);
-          if (card && getCardEffectId(card)) card.effectPulse = true;
-        }
-      }
-    }
-
     this.enqueueTransitions(createTableGroupMoveTransition(groupId, moved.position, moved.cardIds));
     return this.result(true);
   }
@@ -370,6 +357,9 @@ export class DurakGame {
     const model = createCardModel(card, this.state, actor);
     if (!model.effectId) return null;
 
+    const cardInBattle = this.#findBattleCard(card.id);
+    if (cardInBattle) cardInBattle.effectPulse = true;
+
     const zones = createFieldModel(this.state, actor, { mutable: true });
     const outcome = zones.apply(model, {
       ...context,
@@ -394,6 +384,7 @@ export class DurakGame {
       const spawnedSlot = createBattleSlot(this.state, spawned, aiTablePosition(this.state), actor);
       this.state.battle.push(spawnedSlot);
       this.enqueueTransitions(createCardActionTransitions(spawned.id, 'attack', { actor }));
+      if (getCardEffectId(spawnedSlot.attack)) spawnedSlot.attack.effectPulse = true;
     }
 
     if (outcome?.applied && outcome.message) {
