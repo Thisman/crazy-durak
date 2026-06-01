@@ -6,7 +6,7 @@ export const shackle = {
 
   apply(cardModel, zones, context) {
     const { state, random } = context;
-    const defenderHand = state.hands[state.defender];
+    const defenderHand = state.hands[context.enemy];
     if (!defenderHand?.length) return { applied: false };
 
     const available = defenderHand.filter((c) => !(state.frozenCardIds ?? []).includes(c.id));

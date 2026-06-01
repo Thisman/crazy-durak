@@ -820,6 +820,14 @@ body.is-dragging-card .table-card {
   animation: effectBadgePulse 560ms steps(8, end) both;
 }
 
+.card.is-legendary.effect-trigger::after {
+  border-color: #ffd040;
+  box-shadow:
+    0 0 0 3px var(--surface),
+    0 0 0 7px rgba(255, 208, 64, 0.55),
+    0 0 16px rgba(255, 208, 64, 0.35);
+}
+
 
 .effect-tooltip {
   --effect-tooltip-gap: 40px;
