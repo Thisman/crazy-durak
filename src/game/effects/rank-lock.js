@@ -1,6 +1,6 @@
 export const rankLock = {
   id: 'rank_lock',
-  title: 'Печать номинала',
+  title: 'Вето',
   description: 'Когда карта сыграна, этот номинал больше нельзя подкидывать до конца боя.',
   icon: 'fa-solid fa-ban',
 

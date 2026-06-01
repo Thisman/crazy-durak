@@ -89,6 +89,7 @@ export function canThrowIn(state, actor, card) {
   if (state.phase !== 'playing') return false;
   if (state.attacker !== actor) return false;
   if (state.battle.length === 0) return false;
+  if ((state.frozenCardIds ?? []).includes(card.id)) return false;
   if ((state.blockedThrowRanks ?? []).includes(card.rank)) return false;
 
   const hasByRank = tableRanks(state.battle).has(card.rank);
@@ -108,6 +109,7 @@ export function canFinishBattle(state, actor) {
 export function canTransfer(state, actor, card) {
   if (state.phase !== 'playing') return false;
   if (state.defender !== actor) return false;
+  if ((state.frozenCardIds ?? []).includes(card.id)) return false;
   if (state.battleNumber <= 1) return false;
   if (state.battle.length === 0) return false;
   if (state.battle.some((slot) => slotDefenseCount(slot) > 0)) return false;

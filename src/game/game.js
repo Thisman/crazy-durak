@@ -139,6 +139,9 @@ export class DurakGame {
     if (!canStartAttack(this.state, 'player')) {
       return this.result(false, 'Сейчас нельзя атаковать.');
     }
+    if ((this.state.frozenCardIds ?? []).includes(cardId)) {
+      return this.result(false, 'Эта карта заблокирована эффектом.');
+    }
 
     const card = removeCard(this.state.hands.player, cardId);
     if (!card) return this.result(false, 'Карта не найдена среди карт игрока.');

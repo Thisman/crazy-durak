@@ -10,7 +10,7 @@
  *                 ratio between entries matters, so the scale is arbitrary.
  */
 export const EFFECT_CONFIG = {
-  assignChance: 0.35,
+  assignChance: 0.48,
 
   weights: {
     // ─── Обычные (Common) ──────────────────────────────────────────────────
@@ -20,7 +20,7 @@ export const EFFECT_CONFIG = {
     nullify_effect: 1.5,  // Глушитель — cancels enemy effect; tactical, balanced
     black_mark:     1.4,  // Черная метка — defender-first play pressure; manageable
     rust:           1.3,  // Ржавчина — mild attack debuff; doesn't block defense
-    rank_lock:      1.2,  // Запор — limits same-rank throw-ins; predictable
+    rank_lock:      1.2,  // Вето — limits same-rank throw-ins; predictable
     bounce:         1.1,  // Отскок — attack returns on take; situational risk
 
     // ─── Нечастые (Uncommon) ───────────────────────────────────────────────
@@ -44,5 +44,6 @@ export const EFFECT_CONFIG = {
     trump_change:   0.4,  // Знамя — changes trump suit to card's suit
     clone:          0.3,  // Двойник — spawns an extra attack card from deck
     hand_swap:      0.2,  // Обмен рук — swaps both players' entire hands
+    shackle:        0.5,  // Оковы — blocks 2 random defender cards for the battle
   }
 };

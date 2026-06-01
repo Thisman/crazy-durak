@@ -51,6 +51,7 @@ function defaultAnimationProfile() {
 
 export function canCardBeatAttack(defenseCard, attackCard, state) {
   if (!defenseCard || !attackCard) return false;
+  if ((state.frozenCardIds ?? []).includes(defenseCard.id)) return false;
   if ((state.forbiddenDefenseSuits ?? []).includes(defenseCard.suit)) return false;
   if (
     hasEffect(attackCard, EFFECT_IDS.SPEAR)
@@ -66,6 +67,7 @@ export function canCardTransfer(card, state, actor) {
 
 export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards(state.battle)) {
   if (!card || state.phase !== 'playing') return [];
+  if ((state.frozenCardIds ?? []).includes(card.id)) return [];
 
   const normalizedCardsInPlay = normalizeCards(cardsInPlay);
   const ranksInPlay = normalizedCardsInPlay.length

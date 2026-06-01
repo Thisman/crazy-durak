@@ -70,6 +70,7 @@ export function createEmptyState() {
     blockedThrowRanks: [],
     forbiddenDefenseSuits: [],
     forcedAttackSuit: null,
+    frozenCardIds: [],
     effectPulseIds: [],
     lastEvent: 'Нажмите «Начать игру».',
     eventLog: []
@@ -104,6 +105,7 @@ export function cloneState(state) {
     blockedThrowRanks: [...(state.blockedThrowRanks ?? [])],
     forbiddenDefenseSuits: [...(state.forbiddenDefenseSuits ?? [])],
     forcedAttackSuit: state.forcedAttackSuit ?? null,
+    frozenCardIds: [...(state.frozenCardIds ?? [])],
     effectPulseIds: [...(state.effectPulseIds ?? [])],
     eventLog: [...(state.eventLog ?? [])]
   };
@@ -186,7 +188,8 @@ export function setupState(seed, rng) {
 
   if (state.trumpSuit) {
     for (const card of [...state.hands.player, ...state.hands.ai, ...state.deck]) {
-      if (card.suit === state.trumpSuit && getCardEffectId(card) === EFFECT_IDS.SPEAR) {
+      const effectId = getCardEffectId(card);
+      if (card.suit === state.trumpSuit && (effectId === EFFECT_IDS.SPEAR || effectId === EFFECT_IDS.TRUMP_CHANGE)) {
         delete card.effect;
       }
     }

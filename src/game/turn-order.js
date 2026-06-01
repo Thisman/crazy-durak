@@ -39,6 +39,7 @@ export function startNextBattle(state, attacker) {
   state.blockedThrowRanks = [];
   state.forbiddenDefenseSuits = [];
   state.forcedAttackSuit = null;
+  state.frozenCardIds = [];
   state.effectPulseIds = [];
 }
 
