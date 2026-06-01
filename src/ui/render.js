@@ -215,7 +215,7 @@ export class GameRenderer {
       attack.dataset.dragKind = 'table';
       attack.dataset.dragGroupId = slot.groupId ?? slot.attack.dragGroupId ?? '';
       setCardZ(attack, attackZ);
-      if (this.shouldPulseEffect(slot.attack.id)) attack.classList.add('effect-trigger');
+      if (!slot.isDefended && this.shouldPulseEffect(slot.attack.id)) attack.classList.add('effect-trigger');
       if (slot.isDefended) {
         attack.classList.add('is-beaten-card');
       } else {
@@ -247,7 +247,7 @@ export class GameRenderer {
           defense.dataset.dragKind = 'table';
           defense.dataset.dragGroupId = slot.groupId ?? defenseCard.dragGroupId ?? '';
           setCardZ(defense, defenseZ);
-          if (this.shouldPulseEffect(defenseCard.id)) defense.classList.add('effect-trigger');
+          if (!slot.isDefended && this.shouldPulseEffect(defenseCard.id)) defense.classList.add('effect-trigger');
           if (slot.isDefended) {
             defense.classList.add('is-beaten-card');
           } else {
@@ -303,20 +303,20 @@ export class GameRenderer {
     clear(playerStack);
 
     for (const slot of state.battle) {
-      this.appendActiveEffectIcon(slot.attack, slot.source, aiStack, playerStack);
+      this.appendActiveEffectIcon(slot.attack, slot.source, aiStack, playerStack, slot.isDefended);
 
       const defenses = slot.defenses?.length ? slot.defenses : (slot.defense ? [slot.defense] : []);
       defenses.forEach((defenseCard, index) => {
         const source = slot.defenseSources?.[index] ?? (slot.source === 'player' ? 'ai' : 'player');
-        this.appendActiveEffectIcon(defenseCard, source, aiStack, playerStack);
+        this.appendActiveEffectIcon(defenseCard, source, aiStack, playerStack, slot.isDefended);
       });
     }
   }
 
-  appendActiveEffectIcon(card, actor, aiStack, playerStack) {
+  appendActiveEffectIcon(card, actor, aiStack, playerStack, isDefended = false) {
     const icon = createActiveEffectIcon(card, actor);
     if (!icon) return;
-    if (this.shouldPulseEffect(card.id)) icon.classList.add('effect-trigger');
+    if (!isDefended && this.shouldPulseEffect(card.id)) icon.classList.add('effect-trigger');
     (actor === 'ai' ? aiStack : playerStack).append(icon);
   }
 
