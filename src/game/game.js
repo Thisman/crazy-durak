@@ -1,5 +1,5 @@
 import { SUIT_BY_ID, createRng, sortCards } from './cards.js';
-import { chooseAttackCard, chooseDefenseCard, chooseThrowInCard, chooseTransferCard } from './ai.js';
+import { aiRegistry } from '../ai/registry.js';
 import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel } from './model.js';
 import {
   EFFECT_IDS,
@@ -479,7 +479,26 @@ export class DurakGame {
     swapTurnRoles(this.state);
   }
 
+  createAiView() {
+    return {
+      hand: this.state.hands.ai,
+      trumpSuit: this.state.trumpSuit,
+      battle: this.state.battle,
+      attacker: this.state.attacker,
+      defender: this.state.defender,
+      phase: this.state.phase,
+      blockedThrowRanks: this.state.blockedThrowRanks ?? [],
+      forbiddenDefenseSuits: this.state.forbiddenDefenseSuits ?? [],
+      forcedAttackSuit: this.state.forcedAttackSuit ?? null,
+      defenderStartHandCount: this.state.defenderStartHandCount,
+      battleNumber: this.state.battleNumber,
+      hands: this.state.hands,
+      deckCount: this.state.deck.length
+    };
+  }
+
   advanceAi() {
+    const strategy = aiRegistry.getActive();
     let guard = 0;
 
     while (this.state.phase === 'playing' && guard < 80) {
@@ -488,82 +507,33 @@ export class DurakGame {
       if (this.state.battle.length === 0) {
         this.checkGameOver();
         if (this.state.phase !== 'playing') break;
-        if (this.state.attacker === 'ai') {
-          this.aiAttack();
-          break;
-        }
-        break;
+        if (this.state.attacker !== 'ai') break;
       }
 
-      if (this.state.defender === 'ai') {
-        const transferred = this.aiMaybeTransfer();
-        if (transferred) continue;
+      const action = strategy.chooseAction(this.createAiView());
+      if (!action) break;
 
-        const slot = firstUndefendedSlot(this.state.battle);
-        if (!slot) break;
-
-        const defense = chooseDefenseCard(this.state.hands.ai, slot.attack, this.state.trumpSuit, this.state);
-        if (!defense) {
-          this.resolveTake('ai');
-          continue;
-        }
-
-        removeCard(this.state.hands.ai, defense.id);
-        const defensePosition = defensePositionNear(slot);
-        slot.defenses ??= slot.defense ? [slot.defense] : [];
-        slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
-        slot.defenseSources ??= [];
-        slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
-        const defenseOrder = nextPlayOrder(this.state);
-        slot.defenses.push(defense);
-        slot.defensePositions.push(defensePosition);
-        slot.defenseSources.push('ai');
-        slot.defenseOrders.push(defenseOrder);
-        slot.defense = defense;
-        slot.defensePosition = defensePosition;
-        slot.defenseOrder = defenseOrder;
-        this.enqueueTransitions(createCardActionTransitions(defense.id, 'defense', {
-          actor: 'ai',
-          targetCardId: slot.attack.id
-        }));
-        recordEvent(this.state, `ИИ отбился картой ${defense.rank}${defense.symbol}.`);
-        this.applyDefenseInteractionEffects(defense, 'ai', slot);
-
-        break;
-      }
-
-      if (this.state.attacker === 'ai') {
-        if (allDefended(this.state.battle)) {
-          const throwCard = chooseThrowInCard(this.state.hands.ai, this.state, 'ai');
-          if (throwCard) {
-            removeCard(this.state.hands.ai, throwCard.id);
-            const slot = createBattleSlot(this.state, throwCard, aiTablePosition(this.state), 'ai');
-            this.state.battle.push(slot);
-            this.enqueueTransitions(createCardActionTransitions(throwCard.id, 'throw-in', { actor: 'ai' }));
-            recordEvent(this.state, `ИИ подкинул ${throwCard.rank}${throwCard.symbol}.`);
-            this.applyPlayedCardEffect(throwCard, 'ai', { slot, role: 'throw-in' });
-            break;
-          }
-
-          this.resolveFinish();
-          continue;
-        }
-
-        break;
-      }
-
-      break;
+      const shouldContinue = this.executeAiAction(action);
+      if (!shouldContinue) break;
     }
   }
 
-  aiAttack() {
-    const card = chooseAttackCard(this.state.hands.ai, this.state.trumpSuit, this.state);
-    if (!card) {
-      this.checkGameOver();
-      return;
+  executeAiAction(action) {
+    switch (action.type) {
+      case 'attack':   this.executeAiAttack(action);   return false;
+      case 'throw-in': this.executeAiThrowIn(action);  return false;
+      case 'defense':  this.executeAiDefense(action);  return false;
+      case 'transfer': this.executeAiTransfer(action); return true;
+      case 'take':     this.resolveTake('ai');          return true;
+      case 'finish':   this.resolveFinish();            return true;
+      default:         return false;
     }
+  }
 
-    removeCard(this.state.hands.ai, card.id);
+  executeAiAttack(action) {
+    const card = removeCard(this.state.hands.ai, action.cardId);
+    if (!card) return;
+
     const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'attack', { actor: 'ai' }));
@@ -571,36 +541,65 @@ export class DurakGame {
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'attack' });
   }
 
-  aiMaybeTransfer() {
-    if (this.state.defender !== 'ai') return false;
+  executeAiDefense(action) {
+    const slot = this.state.battle.find((s) => s.attack.id === action.targetCardId);
+    const defense = removeCard(this.state.hands.ai, action.cardId);
+    if (!slot || !defense) return;
 
-    const transfer = chooseTransferCard(this.state.hands.ai, this.state, 'ai');
-    if (!transfer) return false;
+    const defensePosition = defensePositionNear(slot);
+    slot.defenses ??= slot.defense ? [slot.defense] : [];
+    slot.defensePositions ??= slot.defensePosition ? [slot.defensePosition] : [];
+    slot.defenseSources ??= [];
+    slot.defenseOrders ??= Number.isFinite(slot.defenseOrder) ? [slot.defenseOrder] : [];
+    const defenseOrder = nextPlayOrder(this.state);
+    slot.defenses.push(defense);
+    slot.defensePositions.push(defensePosition);
+    slot.defenseSources.push('ai');
+    slot.defenseOrders.push(defenseOrder);
+    slot.defense = defense;
+    slot.defensePosition = defensePosition;
+    slot.defenseOrder = defenseOrder;
 
-    removeCard(this.state.hands.ai, transfer.id);
-    const slot = createBattleSlot(this.state, transfer, aiTablePosition(this.state), 'ai');
+    this.enqueueTransitions(createCardActionTransitions(defense.id, 'defense', {
+      actor: 'ai',
+      targetCardId: slot.attack.id
+    }));
+    recordEvent(this.state, `ИИ отбился картой ${defense.rank}${defense.symbol}.`);
+    this.applyDefenseInteractionEffects(defense, 'ai', slot);
+  }
+
+  executeAiThrowIn(action) {
+    const card = removeCard(this.state.hands.ai, action.cardId);
+    if (!card) return;
+
+    const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
     this.state.battle.push(slot);
-    this.enqueueTransitions(createCardActionTransitions(transfer.id, 'transfer', { actor: 'ai' }));
-    this.applyPlayedCardEffect(transfer, 'ai', { slot, role: 'transfer' });
+    this.enqueueTransitions(createCardActionTransitions(card.id, 'throw-in', { actor: 'ai' }));
+    recordEvent(this.state, `ИИ подкинул ${card.rank}${card.symbol}.`);
+    this.applyPlayedCardEffect(card, 'ai', { slot, role: 'throw-in' });
+  }
+
+  executeAiTransfer(action) {
+    const card = removeCard(this.state.hands.ai, action.cardId);
+    if (!card) return;
+
+    const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
+    this.state.battle.push(slot);
+    this.enqueueTransitions(createCardActionTransitions(card.id, 'transfer', { actor: 'ai' }));
+    this.applyPlayedCardEffect(card, 'ai', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;
-    recordEvent(this.state, `ИИ перевел ход картой ${transfer.rank}${transfer.symbol}.`);
-    return true;
+    recordEvent(this.state, `ИИ перевел ход картой ${card.rank}${card.symbol}.`);
   }
 
   aiThrowWhilePlayerTakes() {
+    const strategy = aiRegistry.getActive();
     let throws = 0;
 
     while (throws < 3) {
-      const card = chooseThrowInCard(this.state.hands.ai, this.state, 'ai');
-      if (!card) return;
-
-      removeCard(this.state.hands.ai, card.id);
-      const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
-      this.state.battle.push(slot);
-      this.enqueueTransitions(createCardActionTransitions(card.id, 'throw-in', { actor: 'ai' }));
-      recordEvent(this.state, `ИИ подкинул ${card.rank}${card.symbol}.`);
-      this.applyPlayedCardEffect(card, 'ai', { slot, role: 'throw-in' });
+      const action = strategy.chooseThrowWhileTaking?.(this.createAiView()) ?? null;
+      if (!action || action.type !== 'throw-in') break;
+      this.executeAiThrowIn(action);
       throws += 1;
     }
   }
