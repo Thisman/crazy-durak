@@ -47,6 +47,7 @@ export class GameController {
   #renderer;
   #currentState;
   #isAnimating = false;
+  #generation = 0;
 
   constructor(renderer) {
     this.#renderer = renderer;
@@ -62,20 +63,25 @@ export class GameController {
     if (this.#isAnimating) return;
 
     this.#isAnimating = true;
+    const gen = ++this.#generation;
     this.#renderer.setLocked(true);
     this.#game = createGame(String(Date.now()), { autoAdvanceAi: false });
     this.#renderer.showGame();
     try {
       await this.#renderResult(this.#game.startGame());
-      await this.#continueAiTurns();
+      if (this.#generation === gen) await this.#continueAiTurns(gen);
     } finally {
-      this.#renderer.setLocked(false);
-      this.#isAnimating = false;
+      if (this.#generation === gen) {
+        this.#renderer.setLocked(false);
+        this.#isAnimating = false;
+      }
     }
   }
 
   goHome() {
-    if (this.#isAnimating) return;
+    this.#generation++;
+    this.#isAnimating = false;
+    this.#renderer.setLocked(false);
     this.#game = createGame(undefined, { autoAdvanceAi: false });
     this.#currentState = this.#game.getPublicState();
     this.#renderer.showStartScreen();
@@ -165,9 +171,10 @@ export class GameController {
     return true;
   }
 
-  async #continueAiTurns() {
-    while (shouldAiAct(this.#currentState)) {
+  async #continueAiTurns(gen) {
+    while (this.#generation === gen && shouldAiAct(this.#currentState)) {
       await this.#waitForOpponentThinking();
+      if (this.#generation !== gen) return;
 
       const opponentSourceRect = this.#renderer.captureOpponentCardSourceRect();
       const ok = await this.#renderResult(this.#game.advanceOpponent(), {
@@ -182,14 +189,17 @@ export class GameController {
     if (this.#isAnimating) return false;
 
     this.#isAnimating = true;
+    const gen = ++this.#generation;
     this.#renderer.setLocked(true);
     let ok = false;
     try {
       ok = await this.#renderResult(action(), options);
-      if (ok) await this.#continueAiTurns();
+      if (this.#generation === gen && ok) await this.#continueAiTurns(gen);
     } finally {
-      this.#renderer.setLocked(false);
-      this.#isAnimating = false;
+      if (this.#generation === gen) {
+        this.#renderer.setLocked(false);
+        this.#isAnimating = false;
+      }
     }
 
     return ok;
