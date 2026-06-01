@@ -175,7 +175,6 @@ export class GameRenderer {
       suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? []),
       effectPulseIds: new Set(state.effectPulseIds ?? [])
     };
-    this.elements.battleNumber.textContent = String(state.battleNumber);
     this.setDiscardCount(state.discardCount);
     this.elements.deckCount.textContent = String(state.deckCount);
 
@@ -616,6 +615,12 @@ export class GameRenderer {
   showGame() {
     this.elements.startScreen.classList.add('is-hidden');
     this.elements.gameScreen.classList.remove('is-hidden');
+    this.hideResult();
+  }
+
+  showStartScreen() {
+    this.elements.gameScreen.classList.add('is-hidden');
+    this.elements.startScreen.classList.remove('is-hidden');
     this.hideResult();
   }
 

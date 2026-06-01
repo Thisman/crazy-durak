@@ -6,8 +6,7 @@ const elements = {
   startScreen: document.querySelector('#start-screen'),
   gameScreen: document.querySelector('#game-screen'),
   startButton: document.querySelector('#start-button'),
-  restartButton: document.querySelector('#restart-button'),
-  battleNumber: document.querySelector('#battle-number'),
+  homeButton: document.querySelector('#home-button'),
   opponentHand: document.querySelector('#opponent-hand'),
   discardCount: document.querySelector('#discard-count'),
   deckCount: document.querySelector('#deck-count'),
@@ -43,7 +42,7 @@ new DragController({
 });
 
 elements.startButton.addEventListener('click', () => controller.startNewGame());
-elements.restartButton.addEventListener('click', () => controller.startNewGame());
+elements.homeButton.addEventListener('click', () => controller.goHome());
 elements.modalNewGame.addEventListener('click', () => controller.startNewGame());
 elements.takeButton.addEventListener('click', () => controller.takeCards());
 elements.finishButton.addEventListener('click', () => controller.finishBattle());

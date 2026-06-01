@@ -1,6 +1,5 @@
 const DRAG_SCALE = 1.15;
 const RETURN_DURATION_MS = 180;
-const RETURN_IMPACT_DURATION_MS = 280;
 
 export class DragController {
   constructor(options) {
@@ -41,8 +40,7 @@ export class DragController {
     const offsetX = kind === 'table' ? event.clientX - sourceRect.left : sourceRect.width / 2;
     const offsetY = kind === 'table' ? event.clientY - sourceRect.top : sourceRect.height / 2;
     const initScale = DRAG_SCALE;
-    const initRotation = kind === 'table' ? '0deg' : '-1deg';
-    ghost.style.transform = `translate3d(${event.clientX - offsetX}px, ${event.clientY - offsetY}px, 0) scale(${initScale}) rotate(${initRotation})`;
+    ghost.style.transform = `translate3d(${event.clientX - offsetX}px, ${event.clientY - offsetY}px, 0) scale(${initScale}) rotate(-1deg)`;
 
     hiddenSources.forEach((item) => item.classList.add('is-drag-source'));
     document.body.append(ghost);
@@ -168,10 +166,9 @@ export class DragController {
   };
 
   moveGhost(clientX, clientY) {
-    const { ghost, offsetX, offsetY, kind } = this.active;
+    const { ghost, offsetX, offsetY } = this.active;
     const scale = DRAG_SCALE;
-    const rotation = kind === 'table' ? '0deg' : '-1deg';
-    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${scale}) rotate(${rotation})`;
+    ghost.style.transform = `translate3d(${clientX - offsetX}px, ${clientY - offsetY}px, 0) scale(${scale}) rotate(-1deg)`;
   }
 
   updateActiveTarget(clientX, clientY) {
@@ -302,12 +299,6 @@ export class DragController {
     });
 
     animation.finished.catch(() => {}).then(() => {
-      if (kind === 'hand') {
-        source.classList.add('card-return-impact');
-        const cleanupImpact = () => source.classList.remove('card-return-impact');
-        source.addEventListener('animationend', cleanupImpact, { once: true });
-        window.setTimeout(cleanupImpact, RETURN_IMPACT_DURATION_MS + 60);
-      }
       this.restoreSources(active);
       ghost.remove();
     });

@@ -74,6 +74,13 @@ export class GameController {
     }
   }
 
+  goHome() {
+    if (this.#isAnimating) return;
+    this.#game = createGame(undefined, { autoAdvanceAi: false });
+    this.#currentState = this.#game.getPublicState();
+    this.#renderer.showStartScreen();
+  }
+
   handleDrop(cardId, target) {
     return this.#runAction(
       () => this.#game.playCardToTargetAt(cardId, target.id, target.position),
