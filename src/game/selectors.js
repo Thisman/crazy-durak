@@ -25,6 +25,7 @@ export function publicCard(card, state, actor = 'player') {
     effectTitle: model.effectTitle,
     effectDescription: model.effectDescription,
     effectIcon: model.effectIcon,
+    effectPulse: model.effectPulse,
     state: model.state,
     zone: model.zone,
     owner: model.owner,
@@ -141,7 +142,6 @@ export function buildPublicState(state) {
     canTake: canPlayerTake(state),
     canFinish: canFinishBattle(state, 'player'),
     legalTargets,
-    effectPulseIds: [...(state.effectPulseIds ?? [])],
     lastEvent: state.lastEvent,
     eventLog: [...(state.eventLog ?? [])]
   };

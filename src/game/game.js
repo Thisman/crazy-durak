@@ -38,7 +38,6 @@ import { nextPlayOrder, startNextBattle as applyNextBattle, swapRoles as swapTur
 export { GamePhase } from './lifecycle.js';
 import {
   createCardActionTransitions,
-  createEffectPulseTransition,
   createTableGroupMoveTransition,
   normalizeTransitions
 } from './transitions.js';
@@ -52,6 +51,25 @@ export class DurakGame {
     this.rng = createRng(this.seed || String(Date.now()));
     this.state = options.state ? cloneState(options.state) : createEmptyState();
     this.pendingTransitions = [];
+  }
+
+  #clearEffectPulse() {
+    for (const slot of this.state.battle) {
+      delete slot.attack.effectPulse;
+      for (const defense of (slot.defenses ?? [])) {
+        delete defense.effectPulse;
+      }
+    }
+  }
+
+  #findBattleCard(cardId) {
+    for (const slot of this.state.battle) {
+      if (slot.attack?.id === cardId) return slot.attack;
+      for (const defense of (slot.defenses ?? [])) {
+        if (defense.id === cardId) return defense;
+      }
+    }
+    return null;
   }
 
   startGame() {
@@ -129,6 +147,7 @@ export class DurakGame {
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'attack', { actor: 'player' }));
     recordEvent(this.state, `Вы атаковали картой ${card.rank}${card.symbol}.`);
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'player', { slot, role: 'attack' });
     return this.afterPlayerAction();
   }
@@ -144,6 +163,7 @@ export class DurakGame {
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'throw-in', { actor: 'player' }));
     recordEvent(this.state, `Вы подкинули ${card.rank}${card.symbol}.`);
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'player', { slot, role: 'throw-in' });
     return this.afterPlayerAction();
   }
@@ -180,6 +200,7 @@ export class DurakGame {
       targetCardId: slot.attack.id
     }));
     recordEvent(this.state, `Вы отбились картой ${defense.rank}${defense.symbol}.`);
+    this.#clearEffectPulse();
     this.applyDefenseInteractionEffects(defense, 'player', slot);
     return this.afterPlayerAction();
   }
@@ -198,6 +219,7 @@ export class DurakGame {
     const slot = createBattleSlot(this.state, card, position, 'player');
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'transfer', { actor: 'player' }));
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'player', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;
@@ -227,6 +249,20 @@ export class DurakGame {
   moveTableGroup(groupId, position) {
     const moved = moveTableGroupModel(this.state, groupId, position);
     if (!moved) return this.result(false, 'Эту группу карт нельзя переместить.');
+
+    this.#clearEffectPulse();
+    if (moved.cardIds.length > 0) {
+      const movedSlot = this.state.battle.find((slot) =>
+        slot.attack?.id === moved.cardIds[0]
+        || (slot.defenses ?? []).some((d) => d.id === moved.cardIds[0])
+      );
+      if (movedSlot && !isSlotDefended(movedSlot)) {
+        for (const cardId of moved.cardIds) {
+          const card = this.#findBattleCard(cardId);
+          if (card && getCardEffectId(card)) card.effectPulse = true;
+        }
+      }
+    }
 
     this.enqueueTransitions(createTableGroupMoveTransition(groupId, moved.position, moved.cardIds));
     return this.result(true);
@@ -296,10 +332,12 @@ export class DurakGame {
     if (!canceled.length) return false;
 
     rebuildBattleEffectState(this.state);
-    this.state.effectPulseIds = [
-      ...new Set(canceled.flatMap((item) => [item.nullifier.id, item.target.id]).filter(Boolean))
-    ];
-    this.enqueueTransitions(createEffectPulseTransition(this.state.effectPulseIds));
+    for (const item of canceled) {
+      const nullifierCard = this.#findBattleCard(item.nullifier.id);
+      if (nullifierCard) nullifierCard.effectPulse = true;
+      const targetCard = this.#findBattleCard(item.target.id);
+      if (targetCard) targetCard.effectPulse = true;
+    }
 
     for (const item of canceled) {
       recordEvent(
@@ -317,6 +355,9 @@ export class DurakGame {
 
     if (!getCardEffectId(defense) || hasEffect(defense, EFFECT_IDS.NULLIFY_EFFECT)) return null;
 
+    const defenseInBattle = this.#findBattleCard(defense.id);
+    if (defenseInBattle) defenseInBattle.effectPulse = true;
+
     return this.applyPlayedCardEffect(defense, actor, {
       slot,
       coveredSlot: slot,
@@ -326,7 +367,6 @@ export class DurakGame {
   }
 
   applyPlayedCardEffect(card, actor, context = {}) {
-    this.state.effectPulseIds = [];
     const model = createCardModel(card, this.state, actor);
     if (!model.effectId) return null;
 
@@ -342,8 +382,11 @@ export class DurakGame {
 
     this.state.discardCount = (this.state.discardPile ?? []).length;
     if (Array.isArray(outcome?.pulseIds)) {
-      this.state.effectPulseIds = [...new Set(outcome.pulseIds.filter(Boolean))];
-      this.enqueueTransitions(createEffectPulseTransition(this.state.effectPulseIds));
+      for (const id of outcome.pulseIds) {
+        if (!id) continue;
+        const pulseCard = this.#findBattleCard(id);
+        if (pulseCard) pulseCard.effectPulse = true;
+      }
     }
 
     if (outcome?.spawnedCard) {
@@ -423,6 +466,7 @@ export class DurakGame {
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'attack', { actor: 'ai' }));
     recordEvent(this.state, `ИИ атаковал картой ${card.rank}${card.symbol}.`);
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'attack' });
   }
 
@@ -450,6 +494,7 @@ export class DurakGame {
       targetCardId: slot.attack.id
     }));
     recordEvent(this.state, `ИИ отбился картой ${defense.rank}${defense.symbol}.`);
+    this.#clearEffectPulse();
     this.applyDefenseInteractionEffects(defense, 'ai', slot);
   }
 
@@ -461,6 +506,7 @@ export class DurakGame {
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'throw-in', { actor: 'ai' }));
     recordEvent(this.state, `ИИ подкинул ${card.rank}${card.symbol}.`);
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'throw-in' });
   }
 
@@ -471,6 +517,7 @@ export class DurakGame {
     const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'transfer', { actor: 'ai' }));
+    this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;

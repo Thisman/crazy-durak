@@ -172,8 +172,7 @@ export class GameRenderer {
     this.state = state;
     this.renderOptions = {
       hiddenCardIds: new Set(options.hiddenCardIds ?? []),
-      suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? []),
-      effectPulseIds: new Set(state.effectPulseIds ?? [])
+      suppressEnterCardIds: new Set(options.suppressEnterCardIds ?? [])
     };
     this.setDiscardCount(state.discardCount);
     this.elements.deckCount.textContent = String(state.deckCount);
@@ -215,7 +214,7 @@ export class GameRenderer {
       attack.dataset.dragKind = 'table';
       attack.dataset.dragGroupId = slot.groupId ?? slot.attack.dragGroupId ?? '';
       setCardZ(attack, attackZ);
-      if (!slot.isDefended && this.shouldPulseEffect(slot.attack.id)) attack.classList.add('effect-trigger');
+      if (slot.attack.effectPulse) attack.classList.add('effect-trigger');
       if (slot.isDefended) {
         attack.classList.add('is-beaten-card');
       } else {
@@ -247,7 +246,7 @@ export class GameRenderer {
           defense.dataset.dragKind = 'table';
           defense.dataset.dragGroupId = slot.groupId ?? defenseCard.dragGroupId ?? '';
           setCardZ(defense, defenseZ);
-          if (!slot.isDefended && this.shouldPulseEffect(defenseCard.id)) defense.classList.add('effect-trigger');
+          if (defenseCard.effectPulse) defense.classList.add('effect-trigger');
           if (slot.isDefended) {
             defense.classList.add('is-beaten-card');
           } else {
@@ -277,10 +276,6 @@ export class GameRenderer {
     if (this.renderOptions?.hiddenCardIds.has(cardId)) return false;
     if (this.renderOptions?.suppressEnterCardIds.has(cardId)) return false;
     return true;
-  }
-
-  shouldPulseEffect(cardId) {
-    return this.renderOptions?.effectPulseIds.has(cardId) ?? false;
   }
 
   renderActiveEffects(state) {
@@ -316,7 +311,7 @@ export class GameRenderer {
   appendActiveEffectIcon(card, actor, aiStack, playerStack, isDefended = false) {
     const icon = createActiveEffectIcon(card, actor);
     if (!icon) return;
-    if (!isDefended && this.shouldPulseEffect(card.id)) icon.classList.add('effect-trigger');
+    if (!isDefended && card.effectPulse) icon.classList.add('effect-trigger');
     (actor === 'ai' ? aiStack : playerStack).append(icon);
   }
 
@@ -328,7 +323,6 @@ export class GameRenderer {
       const cardElement = createCardElement(card, { interactive: true, className: 'hand-card' });
       cardElement.dataset.draggable = card.canDrag === false ? 'false' : 'true';
       cardElement.dataset.dragKind = 'hand';
-      if (this.shouldPulseEffect(card.id)) cardElement.classList.add('effect-trigger');
       cardElement.dataset.dropTargets = targets.join(',');
       cardElement.disabled = targets.length === 0;
       cardElement.classList.toggle('is-valid', Boolean(card.isValid));
@@ -348,7 +342,6 @@ export class GameRenderer {
       const cardElement = previewCard
         ? createCardElement(previewCard, { className: 'opponent-revealed-card' })
         : createCardBackElement();
-      if (previewCard && this.shouldPulseEffect(previewCard.id)) cardElement.classList.add('effect-trigger');
       this.elements.opponentHand.append(cardElement);
     }
 
@@ -481,6 +474,7 @@ export class GameRenderer {
     if (!cardElement) return;
 
     const settlement = this.prepareCardSettlement(cardElement, options.fromPosition);
+    await nextFrame();
     cardElement.classList.remove('card-impact');
     void cardElement.offsetWidth;
     cardElement.classList.add('card-impact');

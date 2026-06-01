@@ -695,7 +695,7 @@ body.is-dragging-card .table-card {
 .defense-card > .card-corner,
 .defense-card > .card-center,
 .defense-card > .effect-badge {
-  opacity: 0.4;
+  opacity: 0.28;
   filter: saturate(0.7);
 }
 

@@ -237,6 +237,7 @@ export function createCardModel(card, state, actor = 'player', options = {}) {
     dragGroupId: context.dragGroup?.id ?? (context.slotId ? slotGroupId({ attack: { id: context.slotId } }) : null),
     dragCardIds: context.dragGroup?.cardIds ?? [],
     animationProfile,
+    effectPulse: !!card.effectPulse,
     isValid(cardsInPlay) {
       return getCardDropTargets(card, state, actor, cardsInPlay).length > 0;
     },
