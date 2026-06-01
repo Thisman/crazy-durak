@@ -53,20 +53,6 @@ function createCardElement(card, options = {}) {
   return element;
 }
 
-function createActiveEffectIcon(card, actor) {
-  if (!card?.effectTitle) return null;
-  const owner = actor === 'ai' ? 'ai' : 'player';
-
-  const icon = document.createElement('span');
-  icon.className = `active-effect-icon active-effect-${owner}`;
-  icon.dataset.cardId = card.id;
-  icon.dataset.effectTitle = card.effectTitle;
-  icon.dataset.effectDescription = card.effectDescription ?? '';
-  icon.dataset.effectIcon = card.effectIcon ?? 'fa-solid fa-star';
-  icon.setAttribute('aria-label', card.effectTitle);
-  icon.innerHTML = `<i class="${icon.dataset.effectIcon}" aria-hidden="true"></i>`;
-  return icon;
-}
 
 function createCardBackElement() {
   const element = document.createElement('div');
@@ -196,7 +182,6 @@ export class GameRenderer {
     const currentCardIds = new Set();
     const battleRect = this.elements.battleRow.getBoundingClientRect();
     clear(this.elements.battleRow);
-    this.renderActiveEffects(state);
 
     state.battle.forEach((slot, slotIndex) => {
       const pair = document.createElement('div');
@@ -278,42 +263,6 @@ export class GameRenderer {
     return true;
   }
 
-  renderActiveEffects(state) {
-    const table = this.elements.battleRow.parentElement;
-    let panel = table.querySelector('.active-effects');
-
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.className = 'active-effects';
-      panel.innerHTML = `
-        <div class="active-effect-stack active-effect-stack-ai" aria-label="Эффекты ИИ"></div>
-        <div class="active-effect-stack active-effect-stack-player" aria-label="Ваши эффекты"></div>
-      `;
-      table.append(panel);
-    }
-
-    const aiStack = panel.querySelector('.active-effect-stack-ai');
-    const playerStack = panel.querySelector('.active-effect-stack-player');
-    clear(aiStack);
-    clear(playerStack);
-
-    for (const slot of state.battle) {
-      this.appendActiveEffectIcon(slot.attack, slot.source, aiStack, playerStack, slot.isDefended);
-
-      const defenses = slot.defenses?.length ? slot.defenses : (slot.defense ? [slot.defense] : []);
-      defenses.forEach((defenseCard, index) => {
-        const source = slot.defenseSources?.[index] ?? (slot.source === 'player' ? 'ai' : 'player');
-        this.appendActiveEffectIcon(defenseCard, source, aiStack, playerStack, slot.isDefended);
-      });
-    }
-  }
-
-  appendActiveEffectIcon(card, actor, aiStack, playerStack, isDefended = false) {
-    const icon = createActiveEffectIcon(card, actor);
-    if (!icon) return;
-    if (!isDefended && card.effectPulse) icon.classList.add('effect-trigger');
-    (actor === 'ai' ? aiStack : playerStack).append(icon);
-  }
 
   renderHand(state) {
     clear(this.elements.playerHand);
@@ -673,7 +622,7 @@ export class GameRenderer {
 
   getEffectTooltipTarget(target) {
     if (!(target instanceof Element)) return null;
-    return target.closest('.card.has-effect[data-effect-title], .active-effect-icon[data-effect-title]');
+    return target.closest('.card.has-effect[data-effect-title]');
   }
 
   showEffectTooltip(cardElement) {

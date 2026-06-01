@@ -735,54 +735,6 @@ body.is-dragging-card .table-card {
   animation: effectBadgePulse 560ms steps(8, end) both;
 }
 
-.active-effects {
-  position: absolute;
-  inset: 0;
-  z-index: 12;
-  pointer-events: none;
-}
-
-.active-effect-stack {
-  position: absolute;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  max-width: 180px;
-  pointer-events: none;
-}
-
-.active-effect-stack-ai {
-  left: 16px;
-  top: 16px;
-}
-
-.active-effect-stack-player {
-  right: 16px;
-  bottom: 16px;
-  justify-content: flex-end;
-}
-
-.active-effect-icon {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border: 3px solid var(--line);
-  border-radius: 0;
-  background: var(--surface);
-  color: var(--accent);
-  font-size: 10px;
-  box-shadow: 3px 3px 0 var(--line-dim);
-  pointer-events: auto;
-}
-
-.active-effect-icon.effect-trigger {
-  animation: effectIconPulse 560ms steps(8, end) both;
-}
-
-body.is-dragging-card .active-effect-icon {
-  pointer-events: none;
-}
 
 .effect-tooltip {
   --effect-tooltip-gap: 40px;
