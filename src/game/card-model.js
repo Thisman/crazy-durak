@@ -17,7 +17,8 @@ import {
   isSlotDefended,
   opponentOf,
   slotDefenses,
-  tableRanks
+  tableRanks,
+  tableSuits
 } from './rules.js';
 import { getDragGroup, getSlotZModel, slotGroupId } from './table-model.js';
 
@@ -70,6 +71,9 @@ export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards
   const ranksInPlay = normalizedCardsInPlay.length
     ? new Set(normalizedCardsInPlay.map((item) => item.rank))
     : tableRanks(state.battle);
+  const suitsInPlay = normalizedCardsInPlay.length
+    ? new Set(normalizedCardsInPlay.map((item) => item.suit))
+    : tableSuits(state.battle);
   const targets = [];
 
   if (canStartAttack(state, actor)) {
@@ -77,7 +81,9 @@ export function getCardDropTargets(card, state, actor, cardsInPlay = battleCards
   }
 
   if (state.attacker === actor && state.battle.length > 0) {
-    if (ranksInPlay.has(card.rank) && canThrowIn(state, actor, card)) {
+    const byRank = ranksInPlay.has(card.rank);
+    const bySuit = hasEffect(card, EFFECT_IDS.SUIT_THROW) && suitsInPlay.has(card.suit);
+    if ((byRank || bySuit) && canThrowIn(state, actor, card)) {
       targets.push('table');
     }
   }

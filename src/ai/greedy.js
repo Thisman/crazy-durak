@@ -1,5 +1,5 @@
 import { sortCards } from '../game/cards.js';
-import { allDefended, canThrowIn, firstUndefendedSlot, isTrump, tableRanks } from '../game/rules.js';
+import { allDefended, canThrowIn, firstUndefendedSlot, isTrump } from '../game/rules.js';
 import { canCardBeatAttack, canCardTransfer } from '../game/card-model.js';
 
 function cardCost(card, trumpSuit) {
@@ -48,10 +48,8 @@ function chooseTransferAction(view) {
 }
 
 function chooseThrowInAction(view) {
-  const ranks = tableRanks(view.battle);
-
   const card = sortCards(view.hand, view.trumpSuit)
-    .filter((c) => ranks.has(c.rank) && canThrowIn(view, 'ai', c))
+    .filter((c) => canThrowIn(view, 'ai', c))
     .sort(byCost(view.trumpSuit))[0] ?? null;
 
   return card ? { type: 'throw-in', cardId: card.id } : null;

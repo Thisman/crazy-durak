@@ -183,6 +183,15 @@ export function setupState(seed, rng) {
   state.hands.ai = deck.slice(HAND_TARGET, HAND_TARGET * 2);
   state.trumpCard = state.deck[state.deck.length - 1] ?? null;
   state.trumpSuit = state.trumpCard?.suit ?? null;
+
+  if (state.trumpSuit) {
+    for (const card of [...state.hands.player, ...state.hands.ai, ...state.deck]) {
+      if (card.suit === state.trumpSuit && getCardEffectId(card) === EFFECT_IDS.SPEAR) {
+        delete card.effect;
+      }
+    }
+  }
+
   state.attacker = lowestTrumpOwner(state.hands, state.trumpSuit);
   state.defender = opponentOf(state.attacker);
   state.defenderStartHandCount = state.hands[state.defender].length;

@@ -52,6 +52,19 @@ export function tableRanks(battle) {
   return ranks;
 }
 
+export function tableSuits(battle) {
+  const suits = new Set();
+
+  for (const slot of battle) {
+    suits.add(slot.attack.suit);
+    for (const defense of slotDefenses(slot)) {
+      suits.add(defense.suit);
+    }
+  }
+
+  return suits;
+}
+
 export function allDefended(battle) {
   return battle.length > 0 && battle.every((slot) => isSlotDefended(slot));
 }
@@ -77,7 +90,11 @@ export function canThrowIn(state, actor, card) {
   if (state.attacker !== actor) return false;
   if (state.battle.length === 0) return false;
   if ((state.blockedThrowRanks ?? []).includes(card.rank)) return false;
-  if (!tableRanks(state.battle).has(card.rank)) return false;
+
+  const hasByRank = tableRanks(state.battle).has(card.rank);
+  const hasBySuit = hasEffect(card, EFFECT_IDS.SUIT_THROW) && tableSuits(state.battle).has(card.suit);
+  if (!hasByRank && !hasBySuit) return false;
+
   if (state.battle.length - 1 >= MAX_THROW_INS) return false;
   if (state.battle.length >= state.defenderStartHandCount) return false;
   if (state.forcedAttackSuit && card.suit !== state.forcedAttackSuit) return false;
