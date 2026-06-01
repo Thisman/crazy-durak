@@ -1,4 +1,4 @@
-import { SUIT_BY_ID, createRng, sortCards } from './cards.js';
+import { createRng } from './cards.js';
 import { aiRegistry } from '../ai/registry.js';
 import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel } from './model.js';
 import {
@@ -18,11 +18,8 @@ import {
   slotDefenses
 } from './rules.js';
 import {
-  cloneBattle,
-  cloneCard,
   cloneState,
   createEmptyState,
-  drawCard,
   drawToSix,
   findCard,
   rebuildBattleEffectState,
@@ -34,68 +31,19 @@ import {
   aiTablePosition,
   createBattleSlot,
   defensePositionNear,
-  getSlotZModel,
   moveTableGroup as moveTableGroupModel,
   normalizePosition
 } from './table-model.js';
 import { nextPlayOrder, startNextBattle as applyNextBattle, swapRoles as swapTurnRoles } from './turn-order.js';
-import { detectPhase, GamePhase } from './lifecycle.js';
 export { GamePhase } from './lifecycle.js';
 import {
-  createBattleClearTransition,
   createCardActionTransitions,
   createEffectPulseTransition,
   createTableGroupMoveTransition,
   normalizeTransitions
 } from './transitions.js';
-
-function publicCard(card, state, actor = 'player') {
-  if (!card) return null;
-  const model = createCardModel(card, state, actor);
-
-  return {
-    ...cloneCard(card),
-    nominal: model.nominal,
-    effectId: model.effectId,
-    effectTitle: model.effectTitle,
-    effectDescription: model.effectDescription,
-    effectIcon: model.effectIcon,
-    state: model.state,
-    zone: model.zone,
-    owner: model.owner,
-    role: model.role,
-    slotId: model.slotId,
-    zIndex: model.zIndex,
-    dragGroupId: model.dragGroupId,
-    dragCardIds: [...(model.dragCardIds ?? [])],
-    animationProfile: model.animationProfile
-  };
-}
-
-function publicBattle(state) {
-  return cloneBattle(state.battle).map((slot, slotIndex) => {
-    const zModel = getSlotZModel(state.battle[slotIndex], slotIndex);
-    return {
-      ...slot,
-      groupId: zModel.groupId,
-      attack: publicCard(slot.attack, state),
-      defense: publicCard(slot.defense, state),
-      defenses: slot.defenses.map((defense) => publicCard(defense, state)),
-      defenseSources: [...(slot.defenseSources ?? [])],
-      defenseOrders: [...(slot.defenseOrders ?? [])],
-      defenseZIndexes: [...zModel.defenseZIndexes],
-      attackZIndex: zModel.attackZIndex,
-      isDefended: zModel.isDefended
-    };
-  });
-}
-
-function battleCardIds(battle) {
-  return battle.flatMap((slot) => [
-    slot.attack?.id,
-    ...slotDefenses(slot).map((card) => card.id)
-  ]).filter(Boolean);
-}
+import { buildPublicState, canPlayerTake as canPlayerTakeSelector } from './selectors.js';
+import { applyCheckGameOver, applyResolveTake, applyResolveFinish } from './reducers.js';
 
 export class DurakGame {
   constructor(seed = String(Date.now()), options = {}) {
@@ -115,71 +63,7 @@ export class DurakGame {
   }
 
   getPublicState() {
-    const playerHand = sortCards(this.state.hands.player, this.state.trumpSuit).map(cloneCard);
-    const fieldModel = createFieldModel(this.state, 'player');
-    const cardsInPlay = fieldModel.fieldCards;
-    const legalTargets = {};
-    const playerCardModels = [];
-    const aiHandPreview = this.state.hands.ai.map((card) => (
-      hasEffect(card, EFFECT_IDS.BLACK_MARK) ? publicCard(card, this.state, 'ai') : null
-    ));
-
-    for (const card of playerHand) {
-      const model = createCardModel(card, this.state, 'player');
-      const targets = model.isValid(cardsInPlay) ? model.getDropTargets(cardsInPlay) : [];
-      legalTargets[card.id] = targets;
-      playerCardModels.push({
-        ...card,
-        nominal: model.nominal,
-        effectId: model.effectId,
-        effectTitle: model.effectTitle,
-        effectDescription: model.effectDescription,
-        effectIcon: model.effectIcon,
-        state: model.state,
-        zone: model.zone,
-        owner: model.owner,
-        role: model.role,
-        slotId: model.slotId,
-        zIndex: model.zIndex,
-        dragGroupId: model.dragGroupId,
-        dragCardIds: [...(model.dragCardIds ?? [])],
-        animationProfile: model.animationProfile,
-        canDrag: model.canDrag(),
-        isValid: targets.length > 0
-      });
-    }
-
-    return {
-      phase: this.state.phase,
-      gamePhase: detectPhase(this.state),
-      winner: this.state.winner,
-      battleNumber: this.state.battleNumber,
-      trumpSuit: this.state.trumpSuit,
-      trumpSymbol: this.state.trumpSuit ? SUIT_BY_ID[this.state.trumpSuit].symbol : '—',
-      trumpLabel: this.state.trumpSuit ? SUIT_BY_ID[this.state.trumpSuit].label : '—',
-      trumpCard: publicCard(this.state.trumpCard, this.state),
-      deckCount: this.state.deck.length,
-      discardCount: (this.state.discardPile ?? []).length || this.state.discardCount,
-      aiCardCount: this.state.hands.ai.length,
-      aiHandPreview,
-      playerCardCount: this.state.hands.player.length,
-      playerHand: playerCardModels,
-      battle: publicBattle(this.state),
-      discardCards: fieldModel.discardCards,
-      deckCards: fieldModel.deckCards,
-      enemyCards: fieldModel.enemyCards,
-      playerCards: fieldModel.playerCards,
-      fieldCards: fieldModel.fieldCards,
-      attacker: this.state.attacker,
-      defender: this.state.defender,
-      playerRole: this.state.attacker === 'player' ? 'attacker' : 'defender',
-      canTake: this.canPlayerTake(),
-      canFinish: canFinishBattle(this.state, 'player'),
-      legalTargets,
-      effectPulseIds: [...(this.state.effectPulseIds ?? [])],
-      lastEvent: this.state.lastEvent,
-      eventLog: [...(this.state.eventLog ?? [])]
-    };
+    return buildPublicState(this.state);
   }
 
   playCardToTarget(cardId, target) {
@@ -349,9 +233,7 @@ export class DurakGame {
   }
 
   canPlayerTake() {
-    return this.state.phase === 'playing'
-      && this.state.defender === 'player'
-      && this.state.battle.some((slot) => !isSlotDefended(slot));
+    return canPlayerTakeSelector(this.state);
   }
 
   afterPlayerAction() {
@@ -608,114 +490,32 @@ export class DurakGame {
   }
 
   resolveTake(defender) {
-    const attacker = opponentOf(defender);
-    const collected = [];
-    let bouncedCount = 0;
-    let rustDrawCount = 0;
-    this.enqueueTransitions(createBattleClearTransition('take', defender, battleCardIds(this.state.battle)));
-
-    for (const slot of this.state.battle) {
-      if (slot.returnAttackTo) {
-        this.state.hands[slot.returnAttackTo].push(slot.attack);
-        bouncedCount += 1;
-      } else {
-        collected.push(slot.attack);
-      }
-
-      collected.push(...slotDefenses(slot));
-
-      if (slot.rustyAttack && !isSlotDefended(slot)) {
-        rustDrawCount += 1;
-      }
-    }
-
-    this.state.hands[defender].push(...collected);
-
-    let rustyDrawn = 0;
-    for (let index = 0; index < rustDrawCount; index += 1) {
-      if (drawCard(this.state, defender)) rustyDrawn += 1;
-    }
-
-    if (bouncedCount > 0) {
-      recordEvent(this.state, `Отскок вернул ${bouncedCount} атакующих карт сопернику.`, { kind: 'effect' });
-    }
-    if (rustyDrawn > 0) {
-      recordEvent(this.state, `Ржавчина заставила добрать ${rustyDrawn} карт.`, { kind: 'effect' });
-    }
-    recordEvent(this.state, defender === 'player'
-      ? `Вы взяли ${collected.length} карт.`
-      : `ИИ взял ${collected.length} карт.`);
-    this.state.battle = [];
-    this.drawAfterBattle(attacker, defender);
-    this.startNextBattle(attacker);
+    const { transitions, events, attacker } = applyResolveTake(this.state, defender);
+    this.enqueueTransitions(transitions);
+    events.forEach(([msg, opts]) => recordEvent(this.state, msg, opts));
+    this.#drawAndStartNextBattle(attacker, defender, attacker);
   }
 
   resolveFinish() {
-    const oldAttacker = this.state.attacker;
-    const oldDefender = this.state.defender;
-    const discardedCards = [];
-    let bouncedCount = 0;
-    this.enqueueTransitions(createBattleClearTransition('discard', null, battleCardIds(this.state.battle)));
-
-    for (const slot of this.state.battle) {
-      if (slot.returnAttackTo) {
-        this.state.hands[slot.returnAttackTo].push(slot.attack);
-        bouncedCount += 1;
-      } else {
-        discardedCards.push(slot.attack);
-      }
-
-      discardedCards.push(...slotDefenses(slot));
-    }
-
-    this.state.discardPile.push(...discardedCards);
-    this.state.discardCount = this.state.discardPile.length;
-    this.state.battle = [];
-    if (bouncedCount > 0) {
-      recordEvent(this.state, `Отскок вернул ${bouncedCount} атакующих карт сопернику.`, { kind: 'effect' });
-    }
-    recordEvent(this.state, 'Бой ушел в бито.');
-    this.drawAfterBattle(oldAttacker, oldDefender);
-    this.startNextBattle(oldDefender);
+    const { transitions, events, attacker, defender } = applyResolveFinish(this.state);
+    this.enqueueTransitions(transitions);
+    events.forEach(([msg, opts]) => recordEvent(this.state, msg, opts));
+    this.#drawAndStartNextBattle(attacker, defender, defender);
   }
 
-  drawAfterBattle(attacker, defender) {
-    drawToSix(this.state, attacker);
-    drawToSix(this.state, defender);
-  }
-
-  startNextBattle(attacker) {
-    applyNextBattle(this.state, attacker);
+  #drawAndStartNextBattle(drawFirst, drawSecond, nextAttacker) {
+    drawToSix(this.state, drawFirst);
+    drawToSix(this.state, drawSecond);
+    applyNextBattle(this.state, nextAttacker);
     this.checkGameOver();
   }
 
   checkGameOver() {
-    if (this.state.phase !== 'playing') return;
-    if (this.state.battle.length > 0) return;
-    if (this.state.deck.length > 0) return;
-
-    const playerDone = this.state.hands.player.length === 0;
-    const aiDone = this.state.hands.ai.length === 0;
-
-    if (playerDone && aiDone) {
-      this.state.phase = 'finished';
-      this.state.winner = 'draw';
-      recordEvent(this.state, 'Ничья.');
-      return;
-    }
-
-    if (playerDone) {
-      this.state.phase = 'finished';
-      this.state.winner = 'player';
-      recordEvent(this.state, 'Вы победили.');
-      return;
-    }
-
-    if (aiDone) {
-      this.state.phase = 'finished';
-      this.state.winner = 'ai';
-      recordEvent(this.state, 'ИИ победил.');
-    }
+    const result = applyCheckGameOver(this.state);
+    if (!result) return;
+    this.state.phase = result.phase;
+    this.state.winner = result.winner;
+    recordEvent(this.state, result.event);
   }
 }
 
