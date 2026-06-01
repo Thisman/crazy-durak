@@ -201,7 +201,7 @@ export function setupState(seed, rng) {
   state.phase = 'playing';
   recordEvent(state, state.attacker === 'player'
     ? 'Вы ходите первым.'
-    : 'ИИ ходит первым.');
+    : 'Противник ходит первым.');
 
   return state;
 }

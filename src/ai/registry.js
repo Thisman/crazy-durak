@@ -1,7 +1,8 @@
 import { greedyAI } from './greedy.js';
+import { tacticalAI } from './tactical.js';
 
 const strategies = new Map();
-let activeId = 'greedy';
+let activeId = 'tactical';
 
 /**
  * Runtime registry for AI strategies.
@@ -35,3 +36,4 @@ export const aiRegistry = {
 };
 
 aiRegistry.register(greedyAI);
+aiRegistry.register(tacticalAI);

@@ -386,7 +386,7 @@ export class GameRenderer {
 
   setOpponentThinking(isThinking) {
     this.elements.gameScreen.classList.toggle('is-ai-thinking', isThinking);
-    if (isThinking) this.elements.tableHint.textContent = '\u0418\u0418 \u0434\u0443\u043c\u0430\u0435\u0442';
+    if (isThinking) this.elements.tableHint.textContent = '\u041f\u0440\u043e\u0442\u0438\u0432\u043d\u0438\u043a \u0434\u0443\u043c\u0430\u0435\u0442...';
   }
 
   getBattleCardElement(cardId) {

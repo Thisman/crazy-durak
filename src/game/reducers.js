@@ -29,7 +29,7 @@ export function applyCheckGameOver(state) {
 
   if (playerDone && aiDone) return { phase: 'finished', winner: 'draw', event: 'Ничья.' };
   if (playerDone) return { phase: 'finished', winner: 'player', event: 'Вы победили.' };
-  if (aiDone) return { phase: 'finished', winner: 'ai', event: 'ИИ победил.' };
+  if (aiDone) return { phase: 'finished', winner: 'ai', event: 'Противник победил.' };
   return null;
 }
 
@@ -84,7 +84,7 @@ export function applyResolveTake(state, defender) {
   }
   events.push([defender === 'player'
     ? `Вы взяли ${collected.length} карт.`
-    : `ИИ взял ${collected.length} карт.`]);
+    : `Противник взял ${collected.length} карт.`]);
 
   return { transitions, events, attacker };
 }

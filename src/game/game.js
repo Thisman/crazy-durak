@@ -419,6 +419,7 @@ export class DurakGame {
       blockedThrowRanks: this.state.blockedThrowRanks ?? [],
       forbiddenDefenseSuits: this.state.forbiddenDefenseSuits ?? [],
       forcedAttackSuit: this.state.forcedAttackSuit ?? null,
+      frozenCardIds: this.state.frozenCardIds ?? [],
       defenderStartHandCount: this.state.defenderStartHandCount,
       battleNumber: this.state.battleNumber,
       hands: this.state.hands,
@@ -466,7 +467,7 @@ export class DurakGame {
     const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'attack', { actor: 'ai' }));
-    recordEvent(this.state, `ИИ атаковал картой ${card.rank}${card.symbol}.`);
+    recordEvent(this.state, `Противник атаковал картой ${card.rank}${card.symbol}.`);
     this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'attack' });
   }
@@ -501,7 +502,7 @@ export class DurakGame {
       actor: 'ai',
       targetCardId: slot.attack.id
     }));
-    recordEvent(this.state, `ИИ отбился картой ${defense.rank}${defense.symbol}.`);
+    recordEvent(this.state, `Противник отбился картой ${defense.rank}${defense.symbol}.`);
     this.#clearEffectPulse();
     this.applyDefenseInteractionEffects(defense, 'ai', slot);
   }
@@ -513,7 +514,7 @@ export class DurakGame {
     const slot = createBattleSlot(this.state, card, aiTablePosition(this.state), 'ai');
     this.state.battle.push(slot);
     this.enqueueTransitions(createCardActionTransitions(card.id, 'throw-in', { actor: 'ai' }));
-    recordEvent(this.state, `ИИ подкинул ${card.rank}${card.symbol}.`);
+    recordEvent(this.state, `Противник подкинул ${card.rank}${card.symbol}.`);
     this.#clearEffectPulse();
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'throw-in' });
   }
@@ -529,7 +530,7 @@ export class DurakGame {
     this.applyPlayedCardEffect(card, 'ai', { slot, role: 'transfer' });
     this.swapRoles();
     this.state.defenderStartHandCount = this.state.hands[this.state.defender].length;
-    recordEvent(this.state, `ИИ перевел ход картой ${card.rank}${card.symbol}.`);
+    recordEvent(this.state, `Противник перевел ход картой ${card.rank}${card.symbol}.`);
   }
 
   aiThrowWhilePlayerTakes() {
