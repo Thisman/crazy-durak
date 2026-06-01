@@ -1,3 +1,4 @@
+import { EFFECT_CONFIG } from '../effect-config.js';
 import { doubleCover } from './double-cover.js';
 import { rankLock } from './rank-lock.js';
 import { rust } from './rust.js';
@@ -79,8 +80,6 @@ export const EFFECT_IDS = new Proxy({}, {
 
 export const EFFECT_DEFINITIONS = [...registry.values()];
 
-const RANDOM_EFFECT_IDS = EFFECT_DEFINITIONS.map((effect) => effect.id);
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────────────────────
 
 function randomItem(items, rng = Math.random) {
@@ -132,13 +131,23 @@ export function createEffect(effectId, rng = Math.random, card = null) {
   return effectId;
 }
 
-export function assignRandomEffects(cards, rng = Math.random, chance = 0.38) {
+export function assignRandomEffects(cards, rng = Math.random, chance = EFFECT_CONFIG.assignChance) {
+  const pool = [...registry.keys()]
+    .map((id) => ({ id, weight: EFFECT_CONFIG.weights[id] ?? 0 }))
+    .filter(({ weight }) => weight > 0);
+  const totalWeight = pool.reduce((sum, { weight }) => sum + weight, 0);
+
+  if (totalWeight === 0) return cards.map((card) => ({ ...card }));
+
   return cards.map((card) => {
     if (rng() > chance) return { ...card };
-    return {
-      ...card,
-      effect: createEffect(randomItem(RANDOM_EFFECT_IDS, rng), rng, card)
-    };
+
+    let threshold = rng() * totalWeight;
+    for (const { id, weight } of pool) {
+      threshold -= weight;
+      if (threshold <= 0) return { ...card, effect: createEffect(id, rng, card) };
+    }
+    return { ...card, effect: createEffect(pool.at(-1).id, rng, card) };
   });
 }
 
