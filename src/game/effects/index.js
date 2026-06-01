@@ -120,6 +120,11 @@ export function hasEffect(card, effectId) {
   return getCardEffectId(card) === effectId;
 }
 
+export function isLegendaryEffect(effectId) {
+  if (!effectId) return false;
+  return EFFECT_CONFIG.legendary?.includes(effectId) ?? false;
+}
+
 export function hasAnyEffect(card, effectIds) {
   return effectIds.includes(getCardEffectId(card));
 }

@@ -43,6 +43,11 @@ function createCardElement(card, options = {}) {
     element.dataset.effectDescription = card.effectDescription ?? '';
     element.dataset.effectIcon = card.effectIcon ?? 'fa-solid fa-star';
 
+    if (card.isLegendary) {
+      element.classList.add('is-legendary');
+      element.dataset.legendary = 'true';
+    }
+
     const badge = document.createElement('span');
     badge.className = 'effect-badge';
     badge.setAttribute('aria-hidden', 'true');
@@ -640,6 +645,7 @@ export class GameRenderer {
     tooltip.querySelector('.effect-tooltip-title').textContent = cardElement.dataset.effectTitle;
     tooltip.querySelector('.effect-tooltip-copy').textContent = cardElement.dataset.effectDescription;
     tooltip.querySelector('.effect-tooltip-icon').innerHTML = `<i class="${cardElement.dataset.effectIcon}"></i>`;
+    tooltip.classList.toggle('is-legendary', cardElement.dataset.legendary === 'true');
 
     const rect = cardElement.getBoundingClientRect();
     tooltip.style.visibility = 'hidden';
@@ -663,5 +669,6 @@ export class GameRenderer {
   hideEffectTooltip() {
     this.effectTooltipTarget = null;
     this.elements.effectTooltip.classList.add('is-hidden');
+    this.elements.effectTooltip.classList.remove('is-legendary');
   }
 }

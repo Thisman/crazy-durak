@@ -800,6 +800,79 @@ body.is-dragging-card .effect-tooltip {
   color: var(--ink-invert);
 }
 
+/* ── Legendary card ─────────────────────────────────────────────────────────── */
+/* Dark amber gradient background, neon-gold glow, pixel-stepped shimmer.       */
+/* Applied when a card carries an effect listed in EFFECT_CONFIG.legendary.     */
+
+.card.is-legendary {
+  border-color: #ffd040;
+  background:
+    linear-gradient(90deg, rgba(255, 200, 40, 0.13) 2px, transparent 2px),
+    linear-gradient(180deg, rgba(255, 200, 40, 0.13) 2px, transparent 2px),
+    linear-gradient(155deg, #0d0800 0%, #281500 28%, #180e00 54%, #281500 76%, #0d0800 100%);
+  background-size: 16px 16px, 16px 16px, 100% 100%;
+  color: #ffd040;
+  animation: legendaryGlow 2800ms steps(6, end) infinite;
+}
+
+/* red suits: keep distinguishable against dark background */
+.card.suit-red.is-legendary {
+  color: #ff7840;
+}
+
+.card.is-legendary .effect-badge {
+  background: #ffd040;
+  border-color: #7a4600;
+  color: #0d0800;
+  box-shadow: 2px 2px 0 #7a4600;
+}
+
+.hand-card.is-legendary:not(:disabled):hover {
+  box-shadow: 7px 7px 0 #ffd040, 0 0 10px rgba(255, 200, 40, 0.45);
+}
+
+.attack-card.is-legendary[data-draggable="true"]:not(.is-beaten-card):hover,
+.defense-card.is-legendary[data-draggable="true"]:not(.is-beaten-card):hover {
+  box-shadow: 7px 7px 0 #ffd040, 0 0 10px rgba(255, 200, 40, 0.45);
+}
+
+@keyframes legendaryGlow {
+  0%   { box-shadow: 5px 5px 0 #6b3800, 0 0 4px rgba(255, 200, 40, 0.4); }
+  35%  { box-shadow: 5px 5px 0 #6b3800, 0 0 16px rgba(255, 200, 40, 0.9), 0 0 32px rgba(255, 200, 40, 0.2); }
+  70%  { box-shadow: 5px 5px 0 #6b3800, 0 0 8px rgba(255, 200, 40, 0.55); }
+  100% { box-shadow: 5px 5px 0 #6b3800, 0 0 4px rgba(255, 200, 40, 0.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.is-legendary {
+    animation: none;
+    box-shadow: 5px 5px 0 #6b3800, 0 0 8px rgba(255, 200, 40, 0.55);
+  }
+}
+
+/* Legendary tooltip */
+
+.effect-tooltip.is-legendary {
+  border-color: #ffd040;
+  box-shadow: 5px 5px 0 #6b3800;
+}
+
+.effect-tooltip.is-legendary .effect-tooltip-icon {
+  background: #ffd040;
+  border-color: #7a4600;
+  color: #0d0800;
+}
+
+.effect-tooltip.is-legendary .effect-tooltip-title::before {
+  content: "★ ЛЕГЕНДА";
+  display: block;
+  font-size: 7px;
+  color: #ffd040;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+
 .player-area {
   grid-area: player;
   justify-self: center;

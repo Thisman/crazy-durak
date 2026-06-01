@@ -12,6 +12,10 @@
 export const EFFECT_CONFIG = {
   assignChance: 0.48,
 
+  // Effects marked legendary get special card visuals (dark-gold glow, animated border).
+  // Add or remove effect IDs here to change which effects are considered legendary.
+  legendary: ['trump_change', 'clone', 'hand_swap'],
+
   weights: {
     // ─── Обычные (Common) ──────────────────────────────────────────────────
     // Low-disruption effects that broaden options without hard counters.

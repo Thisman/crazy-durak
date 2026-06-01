@@ -1,5 +1,5 @@
 import { SUIT_BY_ID, sortCards } from './cards.js';
-import { EFFECT_IDS, hasEffect } from './effects.js';
+import { EFFECT_IDS, hasEffect, isLegendaryEffect } from './effects.js';
 import { detectPhase } from './lifecycle.js';
 import { canCardBeatAttack, canCardTransfer, createCardModel, createFieldModel } from './model.js';
 import { canFinishBattle, isSlotDefended, slotDefenses } from './rules.js';
@@ -26,6 +26,7 @@ export function publicCard(card, state, actor = 'player') {
     effectDescription: model.effectDescription,
     effectIcon: model.effectIcon,
     effectPulse: model.effectPulse,
+    isLegendary: isLegendaryEffect(model.effectId),
     state: model.state,
     zone: model.zone,
     owner: model.owner,
@@ -101,6 +102,7 @@ export function buildPublicState(state) {
       effectTitle: model.effectTitle,
       effectDescription: model.effectDescription,
       effectIcon: model.effectIcon,
+      isLegendary: isLegendaryEffect(model.effectId),
       state: model.state,
       zone: model.zone,
       owner: model.owner,
